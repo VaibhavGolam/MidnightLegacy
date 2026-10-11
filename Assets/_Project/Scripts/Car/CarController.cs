@@ -10,13 +10,15 @@ namespace MidnightLegacy
     ///
     /// Axes: x right, z forward, positive yaw / steering / curvature = turning right.
     /// </summary>
-    public sealed class CarController : MonoBehaviour
+    public sealed class CarController : MonoBehaviour, ICarState
     {
         public CarHandlingProfile profile;
         public InputReader input;
         public RoadModel road;
 
         public float startS = 5f;
+        [Tooltip("Tank fraction when a run starts.")]
+        public float startNitro = 0.4f;
 
         // ---- state (road space) ----
         public float S { get; private set; }
@@ -32,6 +34,10 @@ namespace MidnightLegacy
         // ---- conditions ----
         public float Damage01 { get; set; }
         public float SurfaceGrip { get; set; }       // 1 dry, wetGripMultiplier when wet
+        /// <summary>0 = no limit. Used for rolling starts and the tutorial.</summary>
+        public float SpeedCapKph { get; set; }
+        public float NitroCharge { get; set; }
+        public bool NitroActive { get; private set; }
 
         // ---- read outs for HUD, camera, visuals, effects ----
         public float SpeedMS { get { return Mathf.Sqrt(Vx * Vx + Vy * Vy); } }
@@ -51,6 +57,9 @@ namespace MidnightLegacy
         public float WallHitTimer { get; private set; }
 
         public const float WheelRadius = 0.31f;
+        /// <summary>Half length and half width of the car body, used for collisions.</summary>
+        public const float HalfLength = 2.05f;
+        public const float HalfWidth = 0.85f;
 
         float holdTime;
         int holdDir;
@@ -58,6 +67,7 @@ namespace MidnightLegacy
         void Awake()
         {
             SurfaceGrip = 1f;
+            NitroCharge = startNitro;
         }
 
         void OnEnable()
@@ -92,7 +102,49 @@ namespace MidnightLegacy
             holdTime = 0f;
             holdDir = 0;
             WallHitTimer = 0f;
+            NitroCharge = startNitro;
+            NitroActive = false;
             ApplyTransform();
+        }
+
+        /// <summary>Place the car on the road at a given distance and lateral offset (used for grid starts).</summary>
+        public void PlaceAt(float s, float d)
+        {
+            startS = s;
+            ResetCar();
+            D = d;
+            ApplyTransform();
+        }
+
+        /// <summary>Gives the tank a bit of fuel (near misses, clean corners).</summary>
+        public void AddNitro(float amount)
+        {
+            NitroCharge = Mathf.Clamp01(NitroCharge + amount);
+        }
+
+        /// <summary>
+        /// Instant velocity change from hitting another vehicle. dvRoad.x is along the road, dvRoad.y sideways.
+        /// contactFwd is where on the car the hit happened (positive = nose), which kicks the yaw.
+        /// </summary>
+        public void ApplyImpulse(Vector2 dvRoad, float contactFwd, float damageAmount)
+        {
+            float cps = Mathf.Cos(Psi), sps = Mathf.Sin(Psi);
+            float dVx = dvRoad.x * cps + dvRoad.y * sps;
+            float dVy = -dvRoad.x * sps + dvRoad.y * cps;
+            Vx += dVx;
+            Vy = Mathf.Clamp(Vy + dVy, -14f, 14f);
+            Omega += Mathf.Clamp(contactFwd * dVy * 0.3f, -4f, 4f);
+            if (Vx < 3f) Vx = 3f;
+            if (profile != null) damageAmount *= profile.damageTaken;
+            Damage01 = Mathf.Clamp01(Damage01 + damageAmount);
+            WallHitTimer = 0.3f;
+        }
+
+        /// <summary>Pushes the car out of an overlap.</summary>
+        public void Displace(float dS, float dD)
+        {
+            S += dS;
+            D += dD;
         }
 
         void Update()
@@ -169,7 +221,7 @@ namespace MidnightLegacy
             int dir = (input != null) ? Mathf.RoundToInt(input.Steer) : 0;
             UpdateSteering(dt, dir);
 
-            // ---- automatic throttle, brake, handbrake ----
+            // ---- automatic throttle, brake, handbrake, nitro ----
             float speedMS = Mathf.Max(Vx, 0f);
             float steerNorm = Mathf.Abs(SteerAngle) / Mathf.Max(0.01f, p.maxSteerAngle * Mathf.Deg2Rad);
             float lift = Mathf.Clamp01((steerNorm - p.liftStartSteer) / Mathf.Max(0.01f, 1f - p.liftStartSteer))
@@ -177,11 +229,20 @@ namespace MidnightLegacy
                          * Mathf.Clamp01((speedMS * 3.6f - p.liftMinSpeedKph) / 40f);
             bool brakeIn = input != null && input.Brake;
             bool handIn = input != null && input.Handbrake;
+            bool nitroIn = input != null && input.Nitro && NitroCharge > 0.005f && Vx > 5f && !brakeIn;
+            NitroActive = nitroIn;
+            if (nitroIn) NitroCharge = Mathf.Max(0f, NitroCharge - dt / Mathf.Max(0.5f, p.nitroSeconds));
+            else NitroCharge = Mathf.Min(1f, NitroCharge + p.nitroRegenPerSecond * dt);
+
             BrakeAmount = Mathf.MoveTowards(BrakeAmount, brakeIn ? 1f : 0f, dt * p.brakeRamp);
             HandbrakeAmount = Mathf.MoveTowards(HandbrakeAmount, handIn ? 1f : 0f, dt * 8f);
 
-            float cruise = Mathf.Clamp01((p.cruiseLimitKph / 3.6f - Vx) / 3f);
-            Throttle = Mathf.Clamp01(1f - lift) * (1f - BrakeAmount) * cruise;
+            float cruiseMS = p.cruiseLimitKph / 3.6f + (nitroIn ? p.nitroCruiseBonusKph / 3.6f : 0f);
+            if (SpeedCapKph > 0f) cruiseMS = Mathf.Min(cruiseMS, SpeedCapKph / 3.6f);
+            float cruise = Mathf.Clamp01((cruiseMS - Vx) / 3f);
+            float thr = Mathf.Clamp01(1f - lift);
+            if (nitroIn) thr = Mathf.Max(thr, 0.85f);
+            Throttle = thr * (1f - BrakeAmount) * cruise;
 
             // ---- longitudinal forces ----
             float perf = 1f - Mathf.Clamp01(Damage01) * p.damagePerformanceLoss;
@@ -189,7 +250,7 @@ namespace MidnightLegacy
             float vTop = Mathf.Max(10f, p.topSpeedKph / 3.6f);
             float dragK = (p.enginePowerKW * 1000f) / (vTop * vTop * vTop);
             float vEff = Mathf.Max(Vx, 6f);
-            float fDrive = Mathf.Min(powerW / vEff, p.maxDriveForce * perf) * Throttle;
+            float fDrive = Mathf.Min(powerW / vEff, p.maxDriveForce * perf) * Throttle * (nitroIn ? p.nitroForceMultiplier : 1f);
             float fDrag = dragK * Vx * Mathf.Abs(Vx);
             IsOffRoad = Mathf.Abs(D) > roadHalf;
             float fRoll = p.rollingResistance * m * g * (IsOffRoad ? 3.5f : 1f) * Mathf.Clamp01(Vx);
@@ -211,7 +272,8 @@ namespace MidnightLegacy
 
             // ---- grip ----
             float damageGrip = 1f - Mathf.Clamp01(Damage01) * p.damagePerformanceLoss * 0.5f;
-            float surf = SurfaceGrip * (IsOffRoad ? p.offRoadGripMultiplier : 1f) * damageGrip;
+            float aero = 1f + p.aeroGrip * Mathf.Clamp01(Vx / 50f);
+            float surf = SurfaceGrip * (IsOffRoad ? p.offRoadGripMultiplier : 1f) * damageGrip * aero;
             float muF = p.frontGrip * surf;
             float muR = p.rearGrip * surf * Mathf.Lerp(1f, p.handbrakeRearGripMultiplier, HandbrakeAmount);
             float capF = muF * fzf;
@@ -284,7 +346,7 @@ namespace MidnightLegacy
                     Vx = vT * cps + vN * sps;
                     Vy = -vT * sps + vN * cps;
                     Omega *= 0.8f;
-                    Damage01 = Mathf.Clamp01(Damage01 + impact * 0.004f);
+                    Damage01 = Mathf.Clamp01(Damage01 + impact * 0.004f * p.damageTaken);
                     WallHitTimer = 0.3f;
                     EventBus.Raise(new WallHit { impactSpeed = impact, side = side });
                 }

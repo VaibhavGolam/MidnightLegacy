@@ -43,5 +43,24 @@ namespace MidnightLegacy
             r.name = "RuntimeDefaultRecipe";
             return r;
         }
+
+        /// <summary>Builds a recipe from a location theme, a seed and a difficulty (0 gentle .. 1 hard).</summary>
+        public static TrackRecipe FromTheme(ThemeDef theme, int seed, float difficulty, float rampDistance)
+        {
+            TrackRecipe r = CreateInstance<TrackRecipe>();
+            r.name = "Recipe_" + theme.id + "_" + seed;
+            r.seed = seed;
+            r.roadHalfWidth = theme.roadHalfWidth;
+            r.wallOffset = theme.roadHalfWidth + 0.45f;
+            r.straightLength = theme.straightLength;
+            r.curveLength = theme.curveLength;
+            r.minRadius = Mathf.Lerp(theme.minRadius * 1.5f, theme.minRadius, Mathf.Clamp01(difficulty));
+            r.maxRadius = theme.maxRadius;
+            r.sBendChance = theme.sBendChance;
+            r.hillAmplitude = theme.hillAmplitude;
+            r.treeDensity = theme.treeDensity;
+            r.difficultyRampDistance = Mathf.Max(300f, rampDistance);
+            return r;
+        }
     }
 }

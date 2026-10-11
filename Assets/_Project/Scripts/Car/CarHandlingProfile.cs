@@ -6,7 +6,8 @@ namespace MidnightLegacy
     /// Every number that decides how the car drives lives here. Create one with
     /// Assets > Create > Midnight Legacy > Car Handling Profile, or just use the runtime default
     /// and tune it on the phone with the TUNE panel.
-    /// Parts (Phase 4) will modify these values in small steps.
+    /// Garage parts (CarBuild) modify a copy of this profile in small steps. Nothing a player can buy
+    /// with real money touches these numbers.
     /// </summary>
     [CreateAssetMenu(menuName = "Midnight Legacy/Car Handling Profile", fileName = "KairoHachiR_Handling")]
     public sealed class CarHandlingProfile : ScriptableObject
@@ -84,6 +85,21 @@ namespace MidnightLegacy
         [Range(0f, 0.8f)] public float damagePerformanceLoss = 0.35f;
         public float rollingResistance = 0.015f;
 
+        [Header("Nitro")]
+        [Tooltip("Seconds of boost in a full tank.")]
+        public float nitroSeconds = 3.5f;
+        public float nitroForceMultiplier = 1.4f;
+        [Tooltip("Extra speed the auto throttle is allowed to reach while boosting.")]
+        public float nitroCruiseBonusKph = 28f;
+        [Tooltip("Tank fraction gained per second of clean driving.")]
+        public float nitroRegenPerSecond = 0.012f;
+
+        [Header("Aero and durability")]
+        [Tooltip("Extra tyre grip at 50 m/s from downforce (0.1 = +10%).")]
+        public float aeroGrip = 0f;
+        [Tooltip("Multiplier on damage taken in a crash. Lower = tougher.")]
+        public float damageTaken = 1f;
+
         [Header("Start")]
         public float startSpeedKph = 55f;
 
@@ -92,6 +108,13 @@ namespace MidnightLegacy
             CarHandlingProfile p = CreateInstance<CarHandlingProfile>();
             p.name = "RuntimeDefaultHandling";
             return p;
+        }
+
+        /// <summary>Copies every field (including curves) from another profile.</summary>
+        public void CopyFrom(CarHandlingProfile other)
+        {
+            if (other == null || other == this) return;
+            JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(other), this);
         }
     }
 }

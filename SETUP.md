@@ -1,58 +1,99 @@
-# Midnight Legacy, Phase 1: Driving Prototype
+# Midnight Legacy: full build (Phases 0 to 7), 2D version
 
-## Unity setup (about 10 minutes)
+The driving view is now top-down and portrait: an overhead orthographic camera follows the car, with the direction of travel always pointing up the screen. The driving physics, story, events, garage, economy and save are the same as before. Only the drawing changed. Everything is flat shapes built in code, so there are still no art files.
 
-1. Unity Hub: install **Unity 6 LTS** with **Android Build Support** (OpenJDK + Android SDK/NDK).
-2. New project from the **Universal 3D** template (URP + Input System come with it). Name it MidnightLegacy.
-3. Copy the `Assets/_Project` folder from this zip into the project's `Assets/` folder. Let Unity compile.
-4. Menu **Midnight Legacy > Apply Phase 1 Project Settings** (portrait, Linear, IL2CPP, ARM64, Vulkan + GLES3).
-5. **Edit > Project Settings > Player > Other Settings > Active Input Handling** must be `Input System Package (New)` or `Both`. Unity restarts if you change it.
-6. Open any scene (even the sample one) and press Play. Nothing else to set up: `Phase1Bootstrap` builds the car, road, camera, HUD and tuning panel by itself.
-   - Editor controls: A / D or arrow keys to steer, S brake, Space handbrake. Mouse clicks on the bottom of the Game view also work as touches.
-   - Set the Game view to a portrait ratio (9:16) first.
-7. Phone: enable USB debugging, **File > Build Profiles > Android**, switch platform, add the open scene, Build And Run.
+The road is seen from higher up than before, so cars look smaller than in the 3D version. To change that while testing, open the Dev Tuning panel and lower `cam.viewHeightSlow` and `cam.viewHeightFast` (fewer metres of road on screen means bigger cars), or move the car with `cam.carScreenHeight`.
 
-## On the phone
+Everything is in `Assets/_Project`. There are no art, audio or model files: the car, roads, garage, UI, sound effects and music are all generated in code.
 
-- Bottom left / bottom right: hold to steer. Hold longer = more lock. Tap = small correction.
-- BRAKE (above left) and DRIFT / handbrake (above right).
-- **TUNE** (top right) opens the tuning panel over the top 58% of the screen. The steering zones stay live underneath, so you can move a slider with one thumb and drive with the other.
-  - COPY VALUES puts every number on the clipboard. Paste them to me and I'll bake them in as the new defaults.
-  - WET toggles wet grip. LOW / MED / HIGH switches graphics level.
-  - Everything saves on the phone between runs. RESET restores defaults.
+## 1. Put it in Unity
 
-## Test checklist
+1. Unity Hub: Unity 6 LTS with Android Build Support (OpenJDK, SDK, NDK). New project from the **Universal 3D** template (it brings URP and the Input System). The game itself is 2D: a flat top-down view, drawn from code.
+2. **Delete the old `Assets/_Project` folder first** if you used the Phase 1 zip. Old files like `Phase1Bootstrap.cs`, `HUDView.cs` and `Phase1BuildSetup.cs` are gone in this version, and leaving them in will break the compile. Then copy the new `Assets/_Project` in.
+3. Let Unity compile. Menu **Midnight Legacy > Apply Project Settings** (portrait, Linear, IL2CPP, ARM64, Vulkan + GLES3, API 24+). It also switches Active Input Handling to the new Input System and creates an empty `Boot` scene in the build list. Restart Unity if it asks.
+4. Press Play (Game view set to a 9:16 portrait ratio). The game builds itself at run time from `AppRoot`, so the scene stays empty.
+   - Editor controls while driving: A / D or arrows steer, S brake, Space handbrake (drift), Shift or W nitro. Mouse clicks work in the menus.
+5. Phone: USB debugging on, **File > Build Profiles > Android**, Build And Run.
 
-1. Car appears, road scrolls, no pink or black materials. Autumn trees, headlight pool in front of the car, fog fading the distance.
-2. Tap LEFT quickly: small, calm correction. Hold LEFT 1 second: hard turn.
-3. At speed, hold full lock: rear steps out, smoke appears, "SLIDE" shows. Release: car straightens, doesn't snap-spin.
-4. Corner, then BRAKE mid-corner: nose dips, rear gets lighter, car rotates but is catchable.
-5. Hit the guard rail: speed loss, no sticking, no crazy spin.
-6. DRIFT button: rear breaks loose, easy to hold a slide.
-7. Drive 3+ minutes without stopping: no stutter when chunks load, nothing disappears or jumps. Around 2.5 km the world silently rebases (nothing should visibly happen).
-8. FPS counter (top right): note the number on Low / Med / High and which phone.
-9. Rotate the phone, lock screen, come back: still portrait, still running.
+For GitHub builds without Unity on your PC, read `GITHUB_BUILD.md`. This folder already has `Packages` and `ProjectSettings`, and the workflow applies all Android settings itself.
 
-## Files
+**This code was written without a compiler.** I checked syntax with a parser and read every file against the others, but expect a few small compile errors on the first import. Paste the Console errors to me and I will fix them in one pass.
+
+## 2. What is in the game
+
+- **Story:** three chapters, 16 steps. Jun (name is yours to pick) inherits a covered car, meets Old Sato, Mia and Rook, learns the car belonged to the Ghost, and ends up on Kairo Pass against the Black Coupe. Steps unlock with reputation (15, 30, 45, 60, 90, 100, 120).
+- **First race cameo:** the Unknown Driver's black car passes you once on a straight in the first race.
+- **Events:** sprint, time attack, drift score, traffic run (with oncoming lane), chase, escape. 11 side events, 4 Legend Mode runs after the story (one is a daily seed), and a free drive.
+- **Garage:** 8 part slots with 3 tiers each (cash and reputation gated), repairs, paints, wheels, decals, spoilers, a side-view 2D garage you can pan with one finger.
+- **Style:** near misses, clean corners, clean sectors, drifts and overtakes build a combo. Good driving also refills nitro.
+- **Tutorial:** guided prompts (steer, taps, brake, drift, nitro). It never takes control, and every step times out so nobody gets stuck.
+- **Settings:** music, effects, vibration, steering speed, which buttons show, reduce camera shake, FPS counter, story assist, Low / Medium / High graphics.
+- **Frame rate:** an adaptive render scale lowers resolution a little when the phone drops below target and raises it back when there is room.
+
+## 3. Money, fair play and ads
+
+- Cash and reputation come only from driving. Nothing sold for real money touches handling, cash or reputation.
+- **Shop:** Remove Ads, Supporter Pack (ST Indigo paint and wheels), Paint, Wheel and Decal packs. All cosmetic.
+- **Ads:** none while driving. Interstitial only on the results screen, at most one per 3 minutes and per 2 races, never with Remove Ads. Rewarded ads are optional: double bonus, free repair, second chance on a failed run.
+- **Right now the ad and purchase services are stubs** (`Monetization/Monetization.cs`). In the Editor and dev builds they succeed instantly so you can test every flow. A release build with the stubs shows no ads and sells nothing.
+- To go live later you need: a Google Play developer account, an AdMob or Unity LevelPlay account with app IDs, the five products created in Play Console with the IDs in `ProductIds`, a real consent form (Google UMP) for EU/UK players, and a privacy policy page. Replace `AppRoot.PrivacyUrl` (it is a placeholder). I will wire the SDKs in once you have those.
+
+## 4. Phone test checklist
+
+1. Splash, consent, menu, name, prologue. Garage car cover comes off during the Cinder Lane scene.
+2. Tutorial: each prompt appears, completes, and the NITRO / BRAKE / DRIFT buttons show up when taught.
+3. First Night: the black car passes once. Rook races you. A win pays, a loss offers retry.
+4. Results: medals, reward lines, double bonus and second chance buttons (stub ads work in dev builds).
+5. Hub: events unlock as reputation grows, mail shows unread badges, garage upgrades change the rating bars, repairs work.
+6. Traffic run and escape: traffic never forms an impassable wall; the chaser closes in when you crash.
+7. Rain and fog events: grip is lower in the wet.
+8. Lock the screen mid-race: the game pauses and saves. Kill the app and reopen: progress is still there.
+9. Note the FPS on Low / Medium / High, and the phone model and RAM.
+10. Settings: turn on **Developer tuning panel**, drive, tap **TUNE** to adjust handling live. COPY VALUES lets you paste numbers back to me.
+
+## 5. Where to change things
+
+| What | File |
+|---|---|
+| Car handling numbers | `Car/CarHandlingProfile.cs` |
+| Part prices, tiers and effects | `Content/Parts.cs` |
+| Events, rewards, difficulty, rivals | `Content/ContentDB.cs` (or `Resources/MLContent/races.json`, see the README beside it) |
+| Story text, rep gates | `Content/StoryContent.cs` |
+| Roads, weather, time of day | `Content/Environments.cs` |
+| Repair cost, bests, payouts | `Gameplay/Economy.cs`, `Gameplay/RaceManager.cs` |
+| Ad frequency | `Monetization/Monetization.cs` (`AdPolicy`) |
+| Graphics levels | `Settings/GraphicsSettings.cs` |
+
+## 6. Known risks
+
+- **Uncompiled code**, see above.
+- **Performance is untested on a real phone.** The first numbers I need are FPS per graphics level and which phone. Traffic level 3 with rain on Low is the heaviest case.
+- **Car feel** was tuned with a simulation, not a phone. Expect to adjust `CarHandlingProfile` after your first drive.
+- **Running in the Editor changes your URP asset:** the adaptive quality writes the render scale to it. Revert the URP asset in version control if it shows as modified.
+- **IMGUI text field:** the name entry uses Unity's built in field. Check the Android keyboard opens on your phone.
+- **Art:** portraits and backdrops are simple flat shapes on purpose. They can be swapped for real art later without touching the story code.
+
+## 7. File map
 
 ```
 Assets/_Project/
-  Resources/Shaders/MLStylized.shader      night look: vertex colours, headlight cone, fog
+  Resources/Shaders/MLStylized.shader        night look: vertex colours, headlight cone, fog
+  Resources/MLContent/races.json             optional event overrides
   Scripts/
-    Core/       EventBus, GameServices, MeshBuilder, MLMaterials, Phase1Bootstrap
-    Car/        CarHandlingProfile (all tuning numbers), CarController, CarVisuals, SlideEffects
-    Input/      InputReader (multi-touch zones + keyboard)
-    Track/      TrackRecipe, RoadModel, TrackGenerator
-    World/      NightLighting, ChaseCamera
-    UI/         HUDView, TuningPanel
-    Settings/   GraphicsSettings (Low / Medium / High)
+    Core/        AppRoot (entry point + flow), DriveSession, EventBus, GameServices, MeshBuilder, Flat (2D shapes), MLMaterials
+    Car/         CarController, CarHandlingProfile, CarVisuals, CarLook (cosmetics), SlideEffects, NitroEffects
+    Input/       InputReader (multi-touch zones + keyboard)
+    Track/       RoadModel, TrackRecipe, TrackGenerator
+    Traffic/     TrafficSystem, TrafficMeshes, RoadCollision
+    Gameplay/    RaceManager, RaceTypes, RivalController, StyleTracker, TutorialDirector, Economy
+    Content/     ContentDB, StoryContent, Parts, Environments
+    World/       NightLighting, ChaseCamera, WeatherFX
+    Garage/      GarageStage + SideCar (2D side-view garage)
+    Audio/       AudioManager, DriveAudio, Synths (procedural engine, effects and music)
+    Save/        SaveData, SaveSystem (JSON with backup)
+    Settings/    GraphicsSettings, AdaptiveQuality
     Monetization/ Monetization (ad + IAP interfaces, stubs, ad policy)
-    Editor/     Phase1BuildSetup
+    UI/          UIKit, TuningPanel (dev only)
+    UI/Screens/  Splash, Consent, Menu, Hub (+ GarageTab, ShopTab), Dialogue, DriveHUD, Results, SettingsPanel
+    Editor/      BuildSetup
 ```
-
-## Ads and in-app purchases (planned in, not wired to an SDK yet)
-
-- `IAdService` / `IPurchaseService` are the only things game code will ever call. Stubs return success in the Editor and dev builds.
-- `AdPolicy`: no ads while driving, interstitial only on the results screen, at most one per 3 minutes and per 2 races, never if Remove Ads is owned. Rewarded ads are always optional (double reward, free repair, revive).
-- IAP product IDs are in `ProductIds`: Remove Ads, supporter pack, cosmetic paint / wheel / decal packs. Nothing sold changes handling, so no pay-to-win.
-- When we add the real SDKs (Unity LevelPlay or AdMob, plus Unity IAP), you'll need: a Google Play developer account, an AdMob / LevelPlay account with app IDs, products created in Play Console with the IDs above, and a consent form (UMP) for EU users. I'll tell you exactly when.

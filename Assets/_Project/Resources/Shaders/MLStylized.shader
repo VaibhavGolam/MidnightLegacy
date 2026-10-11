@@ -1,15 +1,19 @@
 Shader "MidnightLegacy/Stylized"
 {
-    // One shader for the whole prototype look:
+    // One shader for the whole look:
     //  - flat vertex colours (alpha channel = emissive amount in opaque mode)
     //  - cheap moon + ambient light
     //  - a procedural headlight cone (no real-time lights, no shadows)
-    //  - distance fog
-    // _Unlit = 1 gives a flat, alpha-blended mode used for blob shadows and smoke.
+    //  - fog (distance from the camera, or distance from the screen centre in the top-down view)
+    // _Unlit = 1 gives a flat, alpha-blended mode used for shadows, smoke, rain and tyre marks.
+    // _Additive = 1 (with _Unlit = 1) is for glows: light pools, headlight halos, nitro flames.
+    // _Mask = 0 turns off the soft round mask that blended quads normally get from their UVs (tyre marks).
     Properties
     {
         _Tint ("Tint", Color) = (1,1,1,1)
         _Unlit ("Unlit / blended (0 or 1)", Float) = 0
+        _Additive ("Additive glow (0 or 1)", Float) = 0
+        _Mask ("Round mask (0 or 1)", Float) = 1
         [HideInInspector] _SrcBlend ("Src Blend", Float) = 1
         [HideInInspector] _DstBlend ("Dst Blend", Float) = 0
         [HideInInspector] _ZWrite ("ZWrite", Float) = 1
@@ -25,6 +29,8 @@ Shader "MidnightLegacy/Stylized"
         CBUFFER_START(UnityPerMaterial)
             half4 _Tint;
             float _Unlit;
+            float _Additive;
+            float _Mask;
             float _SrcBlend;
             float _DstBlend;
             float _ZWrite;
@@ -39,6 +45,7 @@ Shader "MidnightLegacy/Stylized"
         float4 _MLMoonDir;    // xyz = direction TO the moon
         half4  _MLFogColor;
         float4 _MLFogParams;  // x = start, y = end
+        float4 _MLView;       // x = 1 in the top-down view
         ENDHLSL
 
         Pass
@@ -83,16 +90,23 @@ Shader "MidnightLegacy/Stylized"
 
             half4 frag(Varyings i) : SV_Target
             {
-                float camDist = distance(_WorldSpaceCameraPos, i.positionWS);
+                bool topDown = _MLView.x > 0.5;
+
+                // top-down: fog is the distance from the screen centre on the ground plane (a soft vignette)
+                float camDist = topDown
+                    ? length(i.positionWS.xz - _WorldSpaceCameraPos.xz)
+                    : distance(_WorldSpaceCameraPos, i.positionWS);
                 half fogT = saturate((camDist - _MLFogParams.x) / max(0.01, _MLFogParams.y - _MLFogParams.x));
 
                 half3 albedo = SRGBToLinear(i.color.rgb) * _Tint.rgb;
 
                 if (_Unlit > 0.5)
                 {
-                    // Flat colour, vertex alpha is opacity, soft round mask from UVs.
-                    half mask = saturate((1.0 - 2.0 * length(i.uv - 0.5)) * 2.5);
+                    // Flat colour, vertex alpha is opacity, optional soft round mask from UVs.
+                    half mask = _Mask > 0.5 ? saturate((1.0 - 2.0 * length(i.uv - 0.5)) * 2.5) : 1.0;
                     half a = i.color.a * _Tint.a * mask;
+                    if (_Additive > 0.5)
+                        return half4(albedo, a * (1.0 - fogT));
                     half3 c = lerp(albedo, _MLFogColor.rgb, fogT);
                     return half4(c, a);
                 }
@@ -110,6 +124,7 @@ Shader "MidnightLegacy/Stylized"
                 half fall = saturate(1.0 - dist / _MLHeadPos.w);
                 fall *= fall;
                 half facing = saturate(dot(n, -dir)) * 0.7 + 0.3;
+                if (topDown) facing = 1.0;
                 light += _MLHeadColor.rgb * (cone * fall * facing);
 
                 half3 col = albedo * light + albedo * (emis * 2.0);

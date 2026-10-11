@@ -100,13 +100,11 @@ namespace MidnightLegacy
 
             if (cam != null)
             {
-                Add("cam.distance", 4f, 14f, () => cam.distance, v => cam.distance = v);
-                Add("cam.height", 2f, 12f, () => cam.height, v => cam.height = v);
-                Add("cam.lookAhead", 0f, 20f, () => cam.lookAhead, v => cam.lookAhead = v);
+                Add("cam.viewHeightSlow (m of road on screen)", 18f, 50f, () => cam.viewHeightSlow, v => cam.viewHeightSlow = v);
+                Add("cam.viewHeightFast (m of road on screen)", 25f, 70f, () => cam.viewHeightFast, v => cam.viewHeightFast = v);
+                Add("cam.carScreenHeight (0.1 low, 0.5 centre)", 0.1f, 0.5f, () => cam.carScreenHeight, v => cam.carScreenHeight = v);
                 Add("cam.followCarHeading", 0f, 1f, () => cam.followCarHeading, v => cam.followCarHeading = v);
                 Add("cam.yawSmoothing", 1f, 12f, () => cam.yawSmoothing, v => cam.yawSmoothing = v);
-                Add("cam.fovSlow", 40f, 80f, () => cam.fovSlow, v => cam.fovSlow = v);
-                Add("cam.fovFast", 40f, 90f, () => cam.fovFast, v => cam.fovFast = v);
             }
 
             Add("car damage (0..1, not saved)", 0f, 1f, () => car.Damage01, v => car.Damage01 = v, false);
@@ -168,6 +166,7 @@ namespace MidnightLegacy
             if (!Visible || car == null) return;
             EnsureStyles();
 
+            Matrix4x4 savedMatrix = GUI.matrix;
             float k = Screen.width / 1080f;
             GUI.matrix = Matrix4x4.Scale(new Vector3(k, k, 1f));
             float h = Screen.height / k;
@@ -211,6 +210,7 @@ namespace MidnightLegacy
             GUILayout.EndScrollView();
 
             GUILayout.EndArea();
+            GUI.matrix = savedMatrix;
         }
 
         void SetQuality(QualityLevel level)
