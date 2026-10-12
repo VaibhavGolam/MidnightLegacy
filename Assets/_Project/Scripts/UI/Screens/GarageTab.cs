@@ -116,7 +116,7 @@ namespace MidnightLegacy
             for (int slot = 0; slot < Parts.SlotCount; slot++)
             {
                 Rect r = new Rect(0f, y, w, 200f);
-                UIKit.Round(r, UIKit.PanelLight);
+                UIKit.Tile(r, UIKit.PanelLight);
                 int tier = save.TierOf(slot);
                 UIKit.Label(new Rect(24f, y + 10f, 360f, 40f), Parts.SlotName(slot).ToUpper(), 30, UIKit.Text, TextAnchor.UpperLeft, true);
                 for (int t = 0; t < Parts.MaxTier; t++)
@@ -163,7 +163,7 @@ namespace MidnightLegacy
                 Rect r = new Rect(0f, y, w, 122f);
                 bool unlocked = Cosmetics.IsUnlocked(it, save);
                 bool isEq = it.id == equipped;
-                UIKit.Round(r, isEq ? new Color(0.16f, 0.2f, 0.42f, 0.98f) : UIKit.PanelLight);
+                UIKit.Tile(r, isEq ? new Color(0.16f, 0.2f, 0.42f, 0.98f) : UIKit.PanelLight);
                 if (UIKit.Tap(r)) app.PreviewCosmetic(cat, it);
 
                 if (cat != 3) UIKit.Circle(new Rect(24f, y + 26f, 70f, 70f), it.color);

@@ -49,14 +49,60 @@ namespace MidnightLegacy
             }
         }
 
+        static string ArtName(TrafficKind k)
+        {
+            switch (k)
+            {
+                case TrafficKind.Hatch: return "traffic_hatch";
+                case TrafficKind.Sedan: return "traffic_sedan";
+                case TrafficKind.Taxi: return "traffic_taxi";
+                case TrafficKind.Van: return "traffic_van";
+                case TrafficKind.Bus: return "traffic_bus";
+                case TrafficKind.Truck: return "traffic_truck";
+                default: return "traffic_moto";
+            }
+        }
+
+        /// <summary>The material for a kind: the painted sprite material when the art is in the project, otherwise `fallback`.</summary>
+        public static Material MaterialFor(TrafficKind kind, Material fallback)
+        {
+            Material m = ArtLoader.Sprite(ArtName(kind), 1, 1f);
+            return m != null ? m : fallback;
+        }
+
+        /// <summary>Paint tint for the white painted cars. Taxi, bus, truck and motorbike keep their own colours.</summary>
+        static Color SpriteTint(TrafficKind kind, int variant)
+        {
+            switch (kind)
+            {
+                case TrafficKind.Hatch:
+                case TrafficKind.Sedan:
+                    return Color.Lerp(CarColors[(variant * 2 + (int)kind) % CarColors.Length], Color.white, 0.22f);
+                case TrafficKind.Van:
+                    return (variant & 1) == 0 ? Color.white : new Color(0.55f, 0.66f, 0.92f);
+                default:
+                    return Color.white;
+            }
+        }
+
         public static Mesh Get(TrafficKind kind, int variant)
         {
             int key = (int)kind * 16 + (variant % Variants);
             Mesh m;
             if (cache.TryGetValue(key, out m) && m != null) return m;
-            MeshBuilder mb = new MeshBuilder();
-            Build(mb, kind, variant % Variants);
-            m = mb.ToMesh("Traffic_" + kind + "_" + variant);
+            string art = ArtName(kind);
+            if (ArtLoader.Sprite(art, 1, 1f) != null)
+            {
+                TrafficSpec spec = Spec(kind);
+                Vector2 size = ArtLoader.FitVehicle(art, spec.halfLen * 2f, spec.halfWid * 2f, 0.65f);
+                m = ArtLoader.VehicleMesh("Traffic_" + kind + "_" + variant, size, 0.30f, SpriteTint(kind, variant % Variants));
+            }
+            else
+            {
+                MeshBuilder mb = new MeshBuilder();
+                Build(mb, kind, variant % Variants);
+                m = mb.ToMesh("Traffic_" + kind + "_" + variant);
+            }
             cache[key] = m;
             return m;
         }

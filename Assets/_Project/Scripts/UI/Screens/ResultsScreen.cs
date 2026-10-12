@@ -32,6 +32,9 @@ namespace MidnightLegacy
             if (Event.current.type == EventType.Repaint) t += Time.unscaledDeltaTime;
 
             UIKit.Fill(new Rect(0f, 0f, UIKit.W, UIKit.H), new Color(0.01f, 0.015f, 0.05f, 0.82f));
+            // a glow behind the title: gold for a win, red for a fail
+            Color glow = r.won ? UIKit.Gold : UIKit.Bad;
+            UIKit.Fade(new Rect(0f, 0f, UIKit.W, UIKit.H * 0.36f), new Color(glow.r, glow.g, glow.b, 0.22f * Mathf.Clamp01(t * 3f)), true);
 
             float w = UIKit.W - 80f, x = 40f, y = safe.y + 50f;
             bool endless = r.def.kind == RaceKind.Endless;
@@ -44,6 +47,19 @@ namespace MidnightLegacy
             if (!r.won && !string.IsNullOrEmpty(r.failReason)) sub += "  |  " + r.failReason;
             UIKit.Label(new Rect(x, y, w, 44f), sub, 30, UIKit.Dim, TextAnchor.MiddleCenter);
             y += 60f;
+
+            // the rival, when the event had one
+            RivalDef rival = string.IsNullOrEmpty(r.def.rival) ? null : ContentDB.Rival(r.def.rival);
+            Texture2D face = rival != null ? UIKit.Portrait(rival.character) : null;
+            if (face != null)
+            {
+                Rect fr = new Rect(UIKit.W * 0.5f - 60f, y, 120f, 120f);
+                UIKit.Image(fr, face, r.won ? Color.white : new Color(0.7f, 0.7f, 0.75f, 1f));
+                UIKit.Outline(new Rect(fr.x - 4f, fr.y - 4f, fr.width + 8f, fr.height + 8f), new Color(1f, 1f, 1f, 0.35f));
+                y += 134f;
+                UIKit.Label(new Rect(x, y, w, 36f), (r.won ? "beat " : "lost to ") + rival.name, 26, UIKit.Dim, TextAnchor.MiddleCenter);
+                y += 46f;
+            }
 
             // medals
             if (r.won && !endless)

@@ -128,7 +128,7 @@ namespace MidnightLegacy
                 v.tr = v.go.transform;
                 v.mf = v.go.AddComponent<MeshFilter>();
                 MeshRenderer mr = v.go.AddComponent<MeshRenderer>();
-                mr.sharedMaterial = material;
+                mr.sharedMaterial = TrafficMeshes.MaterialFor(kind, material);
                 mr.shadowCastingMode = ShadowCastingMode.Off;
                 mr.receiveShadows = false;
             }

@@ -40,6 +40,8 @@ namespace MidnightLegacy
             public Mesh mesh;
             public GameObject glowGo;
             public Mesh glowMesh;
+            public GameObject propsGo;     // painted trees, rocks, lamps and rooftops
+            public Mesh propsMesh;
         }
 
         CarController car;
@@ -54,8 +56,10 @@ namespace MidnightLegacy
         readonly List<TrackMarker> markers = new List<TrackMarker>();
         readonly MeshBuilder mb = new MeshBuilder();
         readonly MeshBuilder gb = new MeshBuilder();   // glow
+        readonly SpriteBatch pb = new SpriteBatch();   // painted props
         Material material;
         Material glowMaterial;
+        Material propMaterial;                         // null when the art is not in the project
 
         int chunksAhead = 4;
         float treeScale = 1f;
@@ -82,6 +86,7 @@ namespace MidnightLegacy
             wet = wetRoad;
             material = MLMaterials.Opaque();
             glowMaterial = MLMaterials.Additive();
+            propMaterial = ArtLoader.HasProps ? ArtLoader.Sprite("props_atlas", -20, 1f) : null;
             ApplyQuality(GraphicsSettings.Preset);
         }
 
@@ -113,11 +118,13 @@ namespace MidnightLegacy
             {
                 if (kv.Value.mesh != null) Destroy(kv.Value.mesh);
                 if (kv.Value.glowMesh != null) Destroy(kv.Value.glowMesh);
+                if (kv.Value.propsMesh != null) Destroy(kv.Value.propsMesh);
             }
             foreach (Chunk c in pool)
             {
                 if (c.mesh != null) Destroy(c.mesh);
                 if (c.glowMesh != null) Destroy(c.glowMesh);
+                if (c.propsMesh != null) Destroy(c.propsMesh);
             }
         }
 
@@ -233,6 +240,17 @@ namespace MidnightLegacy
                 c.glowMesh = new Mesh();
                 c.glowMesh.name = "TrackGlow";
                 gf.sharedMesh = c.glowMesh;
+
+                c.propsGo = new GameObject("Props");
+                c.propsGo.transform.SetParent(c.go.transform, false);
+                MeshFilter pf = c.propsGo.AddComponent<MeshFilter>();
+                MeshRenderer pr = c.propsGo.AddComponent<MeshRenderer>();
+                pr.sharedMaterial = propMaterial != null ? propMaterial : material;
+                pr.shadowCastingMode = ShadowCastingMode.Off;
+                pr.receiveShadows = false;
+                c.propsMesh = new Mesh();
+                c.propsMesh.name = "TrackProps";
+                pf.sharedMesh = c.propsMesh;
             }
             c.index = index;
             c.go.name = "Chunk_" + index;
@@ -240,10 +258,13 @@ namespace MidnightLegacy
 
             mb.Clear();
             gb.Clear();
+            pb.Clear();
             BuildChunkMesh(index);
             mb.Build(c.mesh);
             gb.Build(c.glowMesh);
+            pb.Build(c.propsMesh);
             c.glowGo.SetActive(gb.VertexCount > 0);
+            c.propsGo.SetActive(pb.VertexCount > 0);
             return c;
         }
 
@@ -448,11 +469,31 @@ namespace MidnightLegacy
             }
         }
 
+        /// <summary>A painted prop at p, `size` metres wide, turned a random way, with a little brightness variation (minBright..1).</summary>
+        void AddPropSprite(Vector3 p, Prop kind, float size, float y, System.Random rng, float minBright)
+        {
+            float v = Mathf.Lerp(minBright, 1f, (float)rng.NextDouble());
+            float yaw = (float)rng.NextDouble() * 360f;
+            float hw = size * 0.5f;
+            pb.Add(p.x, p.z, y, hw, hw / ArtLoader.PropAspectOf(kind), yaw, ArtLoader.PropRect(kind), new Color(v, v, v, 1f));
+        }
+
         void AddTree(Vector3 p, System.Random rng)
         {
             float R = Mathf.Lerp(1.5f, 2.6f, (float)rng.NextDouble());
             Color leaf = MeshBuilder.Vary(Foliage(rng), 0.1f, rng);
             Flat.Circle(mb, p.x + 0.9f, p.z - 0.7f, R * 1.05f, 0.10f, Shade(theme.ground, 0.5f), 0f, 10);
+            if (propMaterial != null)
+            {
+                Prop kind = Prop.TreeGreen;
+                if (theme.scenery == Scenery.Autumn)
+                {
+                    double r = rng.NextDouble();
+                    kind = r < 0.30 ? Prop.TreeOrange : (r < 0.50 ? Prop.TreeRed : (r < 0.75 ? Prop.TreeGold : Prop.TreeGreen));
+                }
+                AddPropSprite(p, kind, R * 2.15f, 0.50f, rng, 0.78f);
+                return;
+            }
             Flat.Circle(mb, p.x, p.z, R, 0.40f, Shade(leaf, 0.68f), 0f, 11);
             int blobs = 2 + rng.Next(2);
             for (int b = 0; b < blobs; b++)
@@ -470,6 +511,12 @@ namespace MidnightLegacy
             Color leaf = Foliage(rng);
             float R = Mathf.Lerp(0.55f, 1.05f, (float)rng.NextDouble());
             Flat.Circle(mb, p.x + 0.35f, p.z - 0.3f, R, 0.10f, Shade(theme.ground, 0.5f), 0f, 8);
+            if (propMaterial != null)
+            {
+                Prop kind = theme.scenery == Scenery.Autumn ? Prop.BushAutumn : (theme.scenery == Scenery.Coast ? Prop.BushOlive : Prop.BushGreen);
+                AddPropSprite(p, kind, R * 2.2f, 0.46f, rng, 0.75f);
+                return;
+            }
             Flat.Circle(mb, p.x, p.z, R, 0.38f, Shade(leaf, 0.75f), 0f, 8);
             Flat.Circle(mb, p.x - R * 0.2f, p.z + R * 0.2f, R * 0.6f, 0.42f, Shade(leaf, 1.05f), 0f, 7);
         }
@@ -480,6 +527,11 @@ namespace MidnightLegacy
             Color leaf = MeshBuilder.Vary(Foliage(rng), 0.1f, rng);
             float rot = (float)rng.NextDouble() * 45f;
             Flat.Star(mb, p.x + 0.9f, p.z - 0.7f, R * 1.0f, R * 0.55f, 8, 0.10f, Shade(theme.ground, 0.5f), 0f, rot);
+            if (propMaterial != null)
+            {
+                AddPropSprite(p, Prop.Pine, R * 2.3f, 0.50f, rng, 0.7f);
+                return;
+            }
             Flat.Star(mb, p.x, p.z, R, R * 0.52f, 8, 0.40f, Shade(leaf, 0.62f), 0f, rot);
             Flat.Star(mb, p.x, p.z, R * 0.78f, R * 0.40f, 8, 0.44f, Shade(leaf, 0.85f), 0f, rot + 22f);
             Flat.Star(mb, p.x, p.z, R * 0.52f, R * 0.26f, 8, 0.48f, Shade(leaf, 1.12f), 0f, rot + 45f);
@@ -491,6 +543,11 @@ namespace MidnightLegacy
             float R = Mathf.Lerp(0.8f, 1.9f, (float)rng.NextDouble());
             float rot = (float)rng.NextDouble() * 180f;
             Flat.Rock(mb, p.x + 0.5f, p.z - 0.4f, R * 1.05f, R * 1.3f, 7, 0.10f, Shade(theme.ground, 0.5f), rng, rot);
+            if (propMaterial != null)
+            {
+                AddPropSprite(p, Prop.Rock, R * 2.5f, 0.46f, rng, 0.6f);
+                return;
+            }
             Flat.Rock(mb, p.x, p.z, R, R * 1.25f, 7, 0.34f, Rock, rng, rot);
             Flat.Rock(mb, p.x - R * 0.15f, p.z + R * 0.2f, R * 0.55f, R * 0.7f, 6, 0.38f, Shade(Rock, 1.3f), rng, rot + 20f);
         }
@@ -503,9 +560,19 @@ namespace MidnightLegacy
             Vector2 armDir = Local(-side * 1.7f, 0f, yaw);
             Vector3 head = new Vector3(pole.x + armDir.x, 0.9f, pole.z + armDir.y);
             Color metal = new Color(0.22f, 0.23f, 0.27f);
-            Flat.Circle(mb, pole.x, pole.z, 0.16f, 0.80f, metal, 0f, 8);
-            Flat.Line(mb, new Vector3(pole.x, 0f, pole.z), head, 0.06f, 0.84f, metal);
-            Flat.Rect(mb, head.x, head.z, 0.16f, 0.28f, 0.90f, LampWarm, 1f, yaw * Mathf.Rad2Deg);
+            if (propMaterial != null)
+            {
+                // the painted lamp reaches to the right in the picture, so it is mirrored for the right hand side
+                float w = 1.95f;
+                float l = w / ArtLoader.PropAspectOf(Prop.Lamp);
+                pb.AddAnchored(pole.x, pole.z, 0.9f, w, l, new Vector2(0.04f, 0.80f), yaw * Mathf.Rad2Deg, ArtLoader.PropRect(Prop.Lamp), Color.white, side > 0);
+            }
+            else
+            {
+                Flat.Circle(mb, pole.x, pole.z, 0.16f, 0.80f, metal, 0f, 8);
+                Flat.Line(mb, new Vector3(pole.x, 0f, pole.z), head, 0.06f, 0.84f, metal);
+                Flat.Rect(mb, head.x, head.z, 0.16f, 0.28f, 0.90f, LampWarm, 1f, yaw * Mathf.Rad2Deg);
+            }
             Flat.Glow(gb, head.x, head.z, poolRadius, 0.12f, LampWarm, 0.30f, 16);
             Flat.Glow(gb, head.x, head.z, poolRadius * 0.45f, 0.13f, LampWarm, 0.22f, 12);
         }
@@ -602,6 +669,18 @@ namespace MidnightLegacy
             float yaw = yawRad * Mathf.Rad2Deg;
             float hd = dep * 0.5f, hl = len * 0.5f;
             Flat.Rect(mb, c.x + 0.8f, c.z - 0.7f, hd, hl, 0.10f, Shade(theme.ground, 0.45f), 0f, yaw);   // shadow on the ground
+
+            // the painted rooftop fits footprints that are not too long and thin, the flat roof does the rest
+            float shape = len / Mathf.Max(1f, dep);
+            if (propMaterial != null && shape > 0.75f && shape < 1.7f)
+            {
+                Color tint = new Color(Mathf.Clamp01(0.62f + col.r * 1.4f), Mathf.Clamp01(0.62f + col.g * 1.4f), Mathf.Clamp01(0.62f + col.b * 1.4f), 1f);
+                float turn = rng.NextDouble() < 0.5 ? 0f : 180f;
+                pb.Add(c.x, c.z, 0.36f, hd, hl, yaw + turn, ArtLoader.PropRect(Prop.Roof), tint);
+                AddRoofNeon(c, hd, hl, yawRad, yaw, side, rng);
+                return;
+            }
+
             Flat.Rect(mb, c.x, c.z, hd + 0.14f, hl + 0.14f, 0.28f, Shade(col, 0.4f), 0f, yaw);
             Flat.Rect(mb, c.x, c.z, hd, hl, 0.34f, col, 0f, yaw);
             Flat.Rect(mb, c.x, c.z, hd - 0.5f, hl - 0.5f, 0.38f, Shade(col, 0.86f), 0f, yaw);
@@ -621,7 +700,12 @@ namespace MidnightLegacy
                 Flat.Rect(mb, c.x + o.x, c.z + o.y, 0.9f, 1.4f, 0.44f, cool ? new Color(0.6f, 0.85f, 1f) : new Color(1f, 0.82f, 0.45f), 0.8f, yaw);
             }
 
-            // neon strip along the edge that faces the road, and its glow spilling onto the street
+            AddRoofNeon(c, hd, hl, yawRad, yaw, side, rng);
+        }
+
+        /// <summary>Neon strip along the edge that faces the road, and its glow spilling onto the street.</summary>
+        void AddRoofNeon(Vector3 c, float hd, float hl, float yawRad, float yaw, int side, System.Random rng)
+        {
             Color neon = Neon[rng.Next(Neon.Length)];
             Vector2 edge = Local(-side * (hd - 0.1f), 0f, yawRad);
             Flat.Rect(mb, c.x + edge.x, c.z + edge.y, 0.09f, hl - 0.5f, 0.46f, neon, 0.95f, yaw);

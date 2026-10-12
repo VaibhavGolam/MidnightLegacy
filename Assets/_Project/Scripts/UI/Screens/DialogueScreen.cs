@@ -18,6 +18,8 @@ namespace MidnightLegacy
         CharacterDef speaker;
         float typed;
         bool finished;
+        string lastSpeaker = "";
+        float portraitT = 1f;          // fade in of the portrait when the speaker changes
 
         static Vector3[] stars;
 
@@ -37,6 +39,8 @@ namespace MidnightLegacy
                 for (int i = 0; i < stars.Length; i++) stars[i] = new Vector3((float)r.NextDouble(), (float)r.NextDouble() * 0.45f, 2f + (float)r.NextDouble() * 3f);
             }
 
+            lastSpeaker = "";
+            portraitT = 0f;
             bool garage = def != null && def.bg == "garage";
             app.Stage.Show(garage);
             if (garage)
@@ -61,6 +65,11 @@ namespace MidnightLegacy
             speaker = ContentDB.Character(node.speaker);
             speakerName = speaker != null ? (speaker.name ?? "").Replace("{name}", name) : "";
             typed = 0f;
+            if (node.speaker != lastSpeaker)
+            {
+                lastSpeaker = node.speaker;
+                portraitT = 0f;
+            }
         }
 
         void Advance()
@@ -117,9 +126,16 @@ namespace MidnightLegacy
             DialogueDef shownDef = def;
             Rect safe = SafeRect;
             float dt = Time.unscaledDeltaTime;
-            if (Event.current.type == EventType.Repaint) typed = Mathf.Min(fullText.Length, typed + dt * 62f);
+            if (Event.current.type == EventType.Repaint)
+            {
+                typed = Mathf.Min(fullText.Length, typed + dt * 62f);
+                portraitT = Mathf.Min(1f, portraitT + dt * 3.5f);
+            }
 
-            if (def.bg != "garage") DrawBackground(def.bg);
+            if (def.bg != "garage")
+            {
+                if (!DrawPaintedBackground(def.bg)) DrawBackground(def.bg);
+            }
             else UIKit.Fill(new Rect(0f, UIKit.H * 0.48f, UIKit.W, UIKit.H * 0.52f), new Color(0f, 0f, 0f, 0.35f));
 
             // full screen tap: finish typing, then advance
@@ -136,7 +152,19 @@ namespace MidnightLegacy
             bool isNarr = speaker == null || node.speaker == "narr";
             float boxH = hasChoices && done ? 300f + node.choices.Length * 128f : 440f;
             float boxY = safe.yMax - boxH - 30f;
-            if (!isNarr)
+            Texture2D art = isNarr ? null : UIKit.Portrait(node.speaker);
+            if (art != null)
+            {
+                // painted portrait: fills the space above the text box and fades into the scene at the top and the bottom
+                UIKit.Fill(new Rect(0f, 0f, UIKit.W, UIKit.H), new Color(0f, 0f, 0.02f, 0.55f * portraitT));
+                float ps = UIKit.W;
+                Rect pr = new Rect(0f, boxY + 70f - ps, ps, ps);
+                Color shade = new Color(0.02f, 0.025f, 0.06f, 1f);
+                UIKit.Image(pr, art, new Color(1f, 1f, 1f, portraitT));
+                UIKit.Fade(new Rect(0f, pr.y - 1f, ps, ps * 0.28f), new Color(shade.r, shade.g, shade.b, 0.95f * portraitT), true);
+                UIKit.Fade(new Rect(0f, pr.yMax - ps * 0.34f, ps, ps * 0.34f + 1f), new Color(shade.r, shade.g, shade.b, 0.97f), false);
+            }
+            else if (!isNarr)
             {
                 bool right = node.speaker == "jun";
                 float pw = 360f;
@@ -152,7 +180,10 @@ namespace MidnightLegacy
                 float tw = Mathf.Max(220f, speakerName.Length * 26f + 70f);
                 Rect tag = new Rect(box.x + 30f, box.y - 34f, tw, 60f);
                 UIKit.Round(tag, speaker.color * 0.85f);
+                UIKit.Outline(tag, new Color(1f, 1f, 1f, 0.25f));
                 UIKit.Label(tag, speakerName, 32, Color.white, TextAnchor.MiddleCenter, true);
+                if (!string.IsNullOrEmpty(speaker.role))
+                    UIKit.Label(new Rect(tag.xMax + 16f, tag.y, 420f, tag.height), speaker.role, 24, UIKit.Dim, TextAnchor.MiddleLeft);
             }
 
             string shown = fullText.Substring(0, Mathf.Min(fullText.Length, Mathf.FloorToInt(typed)));
@@ -217,6 +248,17 @@ namespace MidnightLegacy
         }
 
         // ------------------------------------------------------------------ backdrops
+
+        /// <summary>The painted harbour road behind scenes that take place on the road. Returns false when the art is not there.</summary>
+        static bool DrawPaintedBackground(string bg)
+        {
+            if (bg != "road" && bg != "pass") return false;
+            Texture2D t = UIKit.Art("menu_bg");
+            if (t == null) return false;
+            float drift = 0.5f + 0.05f * Mathf.Sin(Time.unscaledTime * 0.1f);
+            UIKit.Cover(new Rect(0f, 0f, UIKit.W, UIKit.H), t, ArtLoader.Aspect("menu_bg"), new Color(0.8f, 0.8f, 0.85f), 1.05f, drift, 0.5f);
+            return true;
+        }
 
         static void Sky(Color top, Color bottom, float height)
         {

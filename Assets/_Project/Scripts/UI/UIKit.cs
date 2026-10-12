@@ -34,8 +34,8 @@ namespace MidnightLegacy
         /// <summary>Safe area in UI units (notches, rounded corners, gesture bar).</summary>
         public static Rect Safe { get; private set; }
 
-        static Texture2D white, roundTex, logoTex, circleTex;
-        static GUIStyle boxStyle;
+        static Texture2D white, roundTex, logoTex, circleTex, gradTex, ringTex;
+        static GUIStyle boxStyle, ringStyle;
         static readonly Dictionary<int, GUIStyle> labelStyles = new Dictionary<int, GUIStyle>();
         static GUIStyle fieldStyle;
         static Matrix4x4 savedMatrix;
@@ -145,11 +145,56 @@ namespace MidnightLegacy
                 circleTex.Apply();
                 circleTex.hideFlags = HideFlags.HideAndDontSave;
             }
+            if (gradTex == null)
+            {
+                // a vertical ramp: opaque at the top, clear at the bottom
+                const int n = 64;
+                gradTex = new Texture2D(1, n, TextureFormat.RGBA32, false);
+                gradTex.filterMode = FilterMode.Bilinear;
+                gradTex.wrapMode = TextureWrapMode.Clamp;
+                Color[] px = new Color[n];
+                for (int y = 0; y < n; y++)
+                {
+                    float t = y / (float)(n - 1);          // 0 at the bottom row, 1 at the top row
+                    px[y] = new Color(1f, 1f, 1f, t * t * (3f - 2f * t));
+                }
+                gradTex.SetPixels(px);
+                gradTex.Apply();
+                gradTex.hideFlags = HideFlags.HideAndDontSave;
+            }
+            if (ringTex == null)
+            {
+                // the outline of the rounded box, two units thick
+                const int n = 64;
+                const float rad = 22f;
+                ringTex = new Texture2D(n, n, TextureFormat.RGBA32, false);
+                ringTex.filterMode = FilterMode.Bilinear;
+                ringTex.wrapMode = TextureWrapMode.Clamp;
+                Color[] px = new Color[n * n];
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        float cx = Mathf.Clamp(x + 0.5f, rad, n - rad);
+                        float cy = Mathf.Clamp(y + 0.5f, rad, n - rad);
+                        float d = Mathf.Sqrt((x + 0.5f - cx) * (x + 0.5f - cx) + (y + 0.5f - cy) * (y + 0.5f - cy));
+                        float a = Mathf.Clamp01(d - (rad - 2f) + 0.5f) * Mathf.Clamp01(rad - d + 0.5f);
+                        px[y * n + x] = new Color(1f, 1f, 1f, a);
+                    }
+                ringTex.SetPixels(px);
+                ringTex.Apply();
+                ringTex.hideFlags = HideFlags.HideAndDontSave;
+            }
             if (boxStyle == null)
             {
                 boxStyle = new GUIStyle();
                 boxStyle.normal.background = roundTex;
                 boxStyle.border = new RectOffset(24, 24, 24, 24);
+            }
+            if (ringStyle == null)
+            {
+                ringStyle = new GUIStyle();
+                ringStyle.normal.background = ringTex;
+                ringStyle.border = new RectOffset(24, 24, 24, 24);
             }
             if (logoTex == null) logoTex = BuildLogo();
         }
@@ -218,9 +263,94 @@ namespace MidnightLegacy
             GUI.color = Color.white;
         }
 
+        /// <summary>The thin outline of a rounded box.</summary>
+        public static void Outline(Rect r, Color c)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            GUI.color = c;
+            ringStyle.Draw(r, GUIContent.none, false, false, false, false);
+            GUI.color = Color.white;
+        }
+
         public static void Card(Rect r)
         {
             Round(r, Panel);
+            Outline(r, new Color(0.55f, 0.6f, 1f, 0.16f));
+        }
+
+        /// <summary>A smaller card (list rows, stat tiles): fill plus the same thin outline as Card.</summary>
+        public static void Tile(Rect r, Color fill)
+        {
+            Round(r, fill);
+            Outline(r, new Color(0.55f, 0.6f, 1f, fill.a < 0.5f ? 0.08f : 0.13f));
+        }
+
+        /// <summary>A soft gradient: the colour c (with its own alpha) at the top edge fading to clear at the bottom, or the other way round.</summary>
+        public static void Fade(Rect r, Color c, bool opaqueAtTop)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            GUI.color = c;
+            if (opaqueAtTop) GUI.DrawTexture(r, gradTex);
+            else GUI.DrawTextureWithTexCoords(r, gradTex, new Rect(0f, 1f, 1f, -1f));
+            GUI.color = Color.white;
+        }
+
+        /// <summary>Darkens the edges of the screen so text on a painted background stays readable.</summary>
+        public static void Vignette(float top, float bottom)
+        {
+            Rect t = new Rect(0f, 0f, W, H * 0.34f);
+            Fade(t, new Color(0f, 0f, 0.02f, top), true);
+            Rect b = new Rect(0f, H * 0.42f, W, H * 0.58f);
+            Fade(b, new Color(0f, 0f, 0.02f, bottom), false);
+        }
+
+        /// <summary>Painted art by file name (Resources/Art), or null when the file is not in the project.</summary>
+        public static Texture2D Art(string name)
+        {
+            return ArtLoader.Tex(name);
+        }
+
+        /// <summary>Character portrait for a character id (char_jun and so on), or null.</summary>
+        public static Texture2D Portrait(string characterId)
+        {
+            if (string.IsNullOrEmpty(characterId)) return null;
+            return ArtLoader.Tex("char_" + characterId);
+        }
+
+        /// <summary>Draws a picture with its own shape inside r (letterboxed), alpha blended.</summary>
+        public static void Image(Rect r, Texture2D t, Color tint)
+        {
+            if (Event.current.type != EventType.Repaint || t == null) return;
+            GUI.color = tint;
+            GUI.DrawTexture(r, t, ScaleMode.ScaleToFit, true);
+            GUI.color = Color.white;
+        }
+
+        /// <summary>
+        /// Fills r with a picture, cropping what does not fit (like CSS background-size: cover).
+        /// zoom 1 = just fits, above 1 zooms in. (fx, fy) is the point to keep centred, 0..1 from the left and from the top.
+        /// </summary>
+        public static void Cover(Rect r, Texture2D t, float aspect, Color tint, float zoom = 1f, float fx = 0.5f, float fy = 0.5f)
+        {
+            if (Event.current.type != EventType.Repaint || t == null) return;
+            float ra = r.width / Mathf.Max(1f, r.height);
+            float uw = 1f, vh = 1f;
+            if (ra > aspect) vh = aspect / ra; else uw = ra / aspect;
+            zoom = Mathf.Max(1f, zoom);
+            uw /= zoom; vh /= zoom;
+            float u0 = Mathf.Clamp(fx - uw * 0.5f, 0f, 1f - uw);
+            float v0 = Mathf.Clamp((1f - fy) - vh * 0.5f, 0f, 1f - vh);
+            GUI.color = tint;
+            GUI.DrawTextureWithTexCoords(r, t, new Rect(u0, v0, uw, vh));
+            GUI.color = Color.white;
+        }
+
+        /// <summary>A small rounded label chip (cash, rep, status).</summary>
+        public static void Chip(Rect r, string text, Color fill, Color fg, int size = 26)
+        {
+            Round(r, fill);
+            Outline(r, new Color(1f, 1f, 1f, 0.10f));
+            Label(r, text, size, fg, TextAnchor.MiddleCenter, true);
         }
 
         static GUIStyle LabelStyle(int size, bool bold, TextAnchor anchor, bool wrap)
@@ -320,6 +450,12 @@ namespace MidnightLegacy
             Rect d = pressed ? new Rect(r.x + 2f, r.y + 3f, r.width - 4f, r.height - 4f) : r;
             Round(new Rect(d.x, d.y + 3f, d.width, d.height), new Color(0f, 0f, 0f, 0.35f));
             Round(d, pressed ? Color.Lerp(bg, Color.black, 0.2f) : bg);
+            if (d.height >= 88f && style != BtnStyle.Ghost)
+            {
+                // a soft highlight on the top half and a thin edge give the flat button some body
+                Round(new Rect(d.x + 3f, d.y + 3f, d.width - 6f, d.height * 0.5f), new Color(1f, 1f, 1f, pressed ? 0.04f : 0.10f));
+                Outline(d, new Color(1f, 1f, 1f, enabled ? 0.14f : 0.05f));
+            }
             int fs = fontSize > 0 ? fontSize : Mathf.Clamp(Mathf.RoundToInt(r.height * 0.40f), 20, 52);
             Label(d, label, fs, fg, TextAnchor.MiddleCenter, true);
 

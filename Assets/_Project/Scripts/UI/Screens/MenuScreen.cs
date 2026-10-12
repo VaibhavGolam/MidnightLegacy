@@ -10,6 +10,7 @@ namespace MidnightLegacy
         bool showSettings;
         string nameText = "Jun";
         Vector2 settingsScroll;
+        float t;
         readonly SettingsPanel settings = new SettingsPanel();
 
         public override void OnEnter()
@@ -17,9 +18,15 @@ namespace MidnightLegacy
             naming = false;
             confirmNew = false;
             showSettings = false;
-            app.Stage.Show(true);
-            app.Stage.SetPose(StagePose.Menu);
-            app.RefreshStage();
+            t = 0f;
+            // the painted harbour road is the title picture; without it the garage scene is shown behind the menu
+            bool art = UIKit.Art("menu_bg") != null;
+            app.Stage.Show(!art);
+            if (!art)
+            {
+                app.Stage.SetPose(StagePose.Menu);
+                app.RefreshStage();
+            }
             if (AudioManager.I != null) AudioManager.I.SetMood(MusicMood.Menu);
         }
 
@@ -36,12 +43,34 @@ namespace MidnightLegacy
             Rect safe = SafeRect;
             SaveData save = app.Save;
 
+            if (Event.current.type == EventType.Repaint) t += Time.unscaledDeltaTime;
+
+            // painted background with a slow drift, darkened top and bottom so the title and buttons read well
+            Texture2D bg = UIKit.Art("menu_bg");
+            if (bg != null)
+            {
+                float zoom = 1.08f + 0.04f * Mathf.Sin(t * 0.12f);
+                float fx = 0.5f + 0.08f * Mathf.Sin(t * 0.07f);
+                UIKit.Cover(new Rect(0f, 0f, UIKit.W, UIKit.H), bg, ArtLoader.Aspect("menu_bg"), Color.white, zoom, fx, 0.55f);
+                UIKit.Vignette(0.85f, 0.92f);
+            }
+
             // title
             float top = safe.y + 70f;
-            UIKit.Logo(new Rect(UIKit.W * 0.5f - 55f, top, 110f, 110f));
-            UIKit.Label(new Rect(0f, top + 120f, UIKit.W, 90f), "MIDNIGHT", 84, UIKit.Text, TextAnchor.MiddleCenter, true);
-            UIKit.Label(new Rect(0f, top + 200f, UIKit.W, 90f), "LEGACY", 84, UIKit.Accent, TextAnchor.MiddleCenter, true);
-            UIKit.Label(new Rect(0f, top + 290f, UIKit.W, 44f), "Legacy is inherited. Greatness is earned.", 28, UIKit.Dim, TextAnchor.MiddleCenter);
+            Texture2D logo = UIKit.Art("title_logo");
+            if (logo != null)
+            {
+                float lw = 900f, lh = lw / ArtLoader.Aspect("title_logo");
+                UIKit.Image(new Rect((UIKit.W - lw) * 0.5f, top + 30f, lw, lh), logo, Color.white);
+                UIKit.Label(new Rect(0f, top + 30f + lh + 10f, UIKit.W, 44f), "Legacy is inherited. Greatness is earned.", 30, new Color(0.86f, 0.89f, 1f, 0.9f), TextAnchor.MiddleCenter);
+            }
+            else
+            {
+                UIKit.Logo(new Rect(UIKit.W * 0.5f - 55f, top, 110f, 110f));
+                UIKit.Label(new Rect(0f, top + 120f, UIKit.W, 90f), "MIDNIGHT", 84, UIKit.Text, TextAnchor.MiddleCenter, true);
+                UIKit.Label(new Rect(0f, top + 200f, UIKit.W, 90f), "LEGACY", 84, UIKit.Accent, TextAnchor.MiddleCenter, true);
+                UIKit.Label(new Rect(0f, top + 290f, UIKit.W, 44f), "Legacy is inherited. Greatness is earned.", 28, UIKit.Dim, TextAnchor.MiddleCenter);
+            }
 
             float bw = 700f, bx = (UIKit.W - bw) * 0.5f;
             float by = safe.yMax - 640f;

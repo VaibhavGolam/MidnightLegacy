@@ -88,6 +88,7 @@ namespace MidnightLegacy.EditorTools
             PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.Vulkan, GraphicsDeviceType.OpenGLES3 });
 
             EnsureUrp();
+            ArtImporter.ApplyAppIcon();
             bool restart = SetInputHandlerToNew();
 
             BootSceneSetup.CreateBootScene();

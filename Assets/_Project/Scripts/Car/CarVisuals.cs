@@ -71,6 +71,19 @@ namespace MidnightLegacy
 
         static readonly Color Ink = new Color(0.02f, 0.02f, 0.03f);
 
+        const float SpriteY = 0.30f;   // the painted car sits under the overlays (decals 0.34 and up) and above the road
+
+        /// <summary>Painted top-down art for each body style, or null (then the flat shapes are drawn).</summary>
+        static string ArtName(int style)
+        {
+            switch (style)
+            {
+                case 1: return "car_hatch";
+                case 2: return "car_wedge";
+                default: return "car_kairo";
+            }
+        }
+
         public void Build(ICarState owner, CarLook carLook, bool blobShadow = true)
         {
             Clear();
@@ -87,14 +100,38 @@ namespace MidnightLegacy
 
             MeshBuilder mb = new MeshBuilder();
 
-            // ---- body shell (fixed to the car) ----
-            BuildBody(mb, d);
-            AddMeshObject("BodyMesh", body, mb.ToMesh("CarBody"), opaque);
+            // painted art if it is in the project, otherwise the flat shapes
+            string artName = ArtName(look.style);
+            Material spriteMat = ArtLoader.Sprite(artName, 1, 1f);
+            bool painted = spriteMat != null;
 
-            // ---- greenhouse and roof (slides a little for a sense of height) ----
-            mb.Clear();
-            BuildRoof(mb, d);
-            AddMeshObject("RoofMesh", roof, mb.ToMesh("CarRoof"), opaque);
+            if (painted)
+            {
+                // ---- painted car: one tinted picture, the flat shapes only add decals on top ----
+                Color tint = look.driverSilhouette ? new Color(0.10f, 0.10f, 0.12f) : look.body;
+                float length = d.zF - d.zB;
+                Vector2 size = ArtLoader.FitVehicle(artName, length, d.w * 2f, 0.45f);
+                Mesh sm0 = ArtLoader.VehicleMesh("CarSprite", size, SpriteY, tint);
+                GameObject sprite = AddMeshObject("Sprite", body, sm0, spriteMat);
+                sprite.transform.localPosition = new Vector3(0f, 0f, (d.zB + d.zF) * 0.5f);
+
+                BuildBodyOverlay(mb, d);
+                if (mb.VertexCount > 0) AddMeshObject("BodyMesh", body, mb.ToMesh("CarBody"), opaque);
+                mb.Clear();
+                if (!look.driverSilhouette) BuildRoofDecal(mb, d);
+                if (mb.VertexCount > 0) AddMeshObject("RoofMesh", roof, mb.ToMesh("CarRoof"), opaque);
+            }
+            else
+            {
+                // ---- body shell (fixed to the car) ----
+                BuildBody(mb, d);
+                AddMeshObject("BodyMesh", body, mb.ToMesh("CarBody"), opaque);
+
+                // ---- greenhouse and roof (slides a little for a sense of height) ----
+                mb.Clear();
+                BuildRoof(mb, d);
+                AddMeshObject("RoofMesh", roof, mb.ToMesh("CarRoof"), opaque);
+            }
 
             // ---- brake lights (only visible while braking) ----
             mb.Clear();
@@ -108,16 +145,19 @@ namespace MidnightLegacy
             brakeHalo.transform.localPosition = Vector3.zero;
             brakeGlow.SetActive(false);
 
-            // ---- wheels ----
-            mb.Clear();
-            BuildWheel(mb);
-            Mesh wheelMesh = mb.ToMesh("CarWheel");
-            meshes.Add(wheelMesh);
-            float frontZ = d.zF - 0.80f, rearZ = d.zB + 0.72f, x = d.w - 0.03f;
-            MakeWheel("WheelFL", new Vector3(-x, 0f, frontZ), true, 0, wheelMesh, opaque, false);
-            MakeWheel("WheelFR", new Vector3(x, 0f, frontZ), true, 1, wheelMesh, opaque, true);
-            MakeWheel("WheelRL", new Vector3(-x, 0f, rearZ), false, 2, wheelMesh, opaque, false);
-            MakeWheel("WheelRR", new Vector3(x, 0f, rearZ), false, 3, wheelMesh, opaque, true);
+            // ---- wheels (the painted car already has its own) ----
+            if (!painted)
+            {
+                mb.Clear();
+                BuildWheel(mb);
+                Mesh wheelMesh = mb.ToMesh("CarWheel");
+                meshes.Add(wheelMesh);
+                float frontZ = d.zF - 0.80f, rearZ = d.zB + 0.72f, x = d.w - 0.03f;
+                MakeWheel("WheelFL", new Vector3(-x, 0f, frontZ), true, 0, wheelMesh, opaque, false);
+                MakeWheel("WheelFR", new Vector3(x, 0f, frontZ), true, 1, wheelMesh, opaque, true);
+                MakeWheel("WheelRL", new Vector3(-x, 0f, rearZ), false, 2, wheelMesh, opaque, false);
+                MakeWheel("WheelRR", new Vector3(x, 0f, rearZ), false, 3, wheelMesh, opaque, true);
+            }
 
             // ---- headlight glow and underglow ----
             mb.Clear();
@@ -252,6 +292,14 @@ namespace MidnightLegacy
 
             // spoiler
             BuildSpoiler(mb, d, trim);
+        }
+
+        /// <summary>Decals on the hood and deck, drawn on top of the painted car.</summary>
+        void BuildBodyOverlay(MeshBuilder mb, Dims d)
+        {
+            float hoodZ0 = d.gz1 - 0.02f, hoodZ1 = d.zF - 0.14f;
+            float deckZ0 = d.zB + 0.18f, deckZ1 = d.gz0 + 0.02f;
+            BuildBodyDecal(mb, d, hoodZ0, hoodZ1, deckZ0, deckZ1);
         }
 
         void BuildSpoiler(MeshBuilder mb, Dims d, Color trim)

@@ -10,7 +10,7 @@ Everything is in `Assets/_Project`. There are no art, audio or model files: the 
 
 1. Unity Hub: Unity 6 LTS with Android Build Support (OpenJDK, SDK, NDK). New project from the **Universal 3D** template (it brings URP and the Input System). The game itself is 2D: a flat top-down view, drawn from code.
 2. **Delete the old `Assets/_Project` folder first** if you used the Phase 1 zip. Old files like `Phase1Bootstrap.cs`, `HUDView.cs` and `Phase1BuildSetup.cs` are gone in this version, and leaving them in will break the compile. Then copy the new `Assets/_Project` in.
-3. Let Unity compile. Menu **Midnight Legacy > Apply Project Settings** (portrait, Linear, IL2CPP, ARM64, Vulkan + GLES3, API 24+). It also switches Active Input Handling to the new Input System and creates an empty `Boot` scene in the build list. Restart Unity if it asks.
+3. Let Unity compile. Menu **Midnight Legacy > Apply Project Settings** (portrait, Linear, IL2CPP, ARM64, Vulkan + GLES3, API 26+). It also switches Active Input Handling to the new Input System and creates an empty `Boot` scene in the build list. Restart Unity if it asks.
 4. Press Play (Game view set to a 9:16 portrait ratio). The game builds itself at run time from `AppRoot`, so the scene stays empty.
    - Editor controls while driving: A / D or arrows steer, S brake, Space handbrake (drift), Shift or W nitro. Mouse clicks work in the menus.
 5. Phone: USB debugging on, **File > Build Profiles > Android**, Build And Run.
@@ -71,16 +71,19 @@ For GitHub builds without Unity on your PC, read `GITHUB_BUILD.md`. This folder 
 - **Car feel** was tuned with a simulation, not a phone. Expect to adjust `CarHandlingProfile` after your first drive.
 - **Running in the Editor changes your URP asset:** the adaptive quality writes the render scale to it. Revert the URP asset in version control if it shows as modified.
 - **IMGUI text field:** the name entry uses Unity's built in field. Check the Android keyboard opens on your phone.
-- **Art:** portraits and backdrops are simple flat shapes on purpose. They can be swapped for real art later without touching the story code.
+- **Painted art:** see section 8. Every picture is optional; a missing file falls back to the flat shapes. The first import must finish before Play (Unity does this itself, or run `Midnight Legacy > Reimport Art`).
 
 ## 7. File map
 
 ```
 Assets/_Project/
   Resources/Shaders/MLStylized.shader        night look: vertex colours, headlight cone, fog
+  Resources/Shaders/MLSprite.shader          textured sprites (painted cars, traffic, props, garage)
+  Resources/Art/                             the painted art (PNG/JPG), loaded by name
+  Art_Source/                                originals that are not loaded at run time (app icon, prop sources)
   Resources/MLContent/races.json             optional event overrides
   Scripts/
-    Core/        AppRoot (entry point + flow), DriveSession, EventBus, GameServices, MeshBuilder, Flat (2D shapes), MLMaterials
+    Core/        AppRoot (entry point + flow), DriveSession, EventBus, GameServices, MeshBuilder, Flat (2D shapes), MLMaterials, ArtLoader, SpriteBatch
     Car/         CarController, CarHandlingProfile, CarVisuals, CarLook (cosmetics), SlideEffects, NitroEffects
     Input/       InputReader (multi-touch zones + keyboard)
     Track/       RoadModel, TrackRecipe, TrackGenerator
@@ -95,5 +98,26 @@ Assets/_Project/
     Monetization/ Monetization (ad + IAP interfaces, stubs, ad policy)
     UI/          UIKit, TuningPanel (dev only)
     UI/Screens/  Splash, Consent, Menu, Hub (+ GarageTab, ShopTab), Dialogue, DriveHUD, Results, SettingsPanel
-    Editor/      BuildSetup
+    Editor/      BuildSetup, ArtImporter (import settings for the art, app icon)
 ```
+
+## 8. Painted art
+
+Files live in `Assets/_Project/Resources/Art/` and are found by name. If one is missing the game draws the old flat shape instead, so you can replace pieces one at a time.
+
+| File | Used for |
+|---|---|
+| `car_kairo`, `car_hatch`, `car_wedge` | Top-down player and rival cars (white art, tinted with the paint colour). Decals still draw on top. |
+| `traffic_hatch`, `_sedan`, `_taxi`, `_van`, `_bus`, `_truck`, `_moto` | Traffic. Hatch, sedan and one van variant are tinted, the rest keep their own colours. |
+| `props_atlas` | Trees (green, orange, red, gold), pine, bushes, rock, street lamp, rooftop. Built from the files in `Art_Source/props`. |
+| `car_side_kairo`, `wheel_side_bar/five/mesh`, `car_cover` | Side-view garage car, its wheels (chosen by the rim style) and the dust cover. |
+| `garage_bg` | Garage wall and floor behind the hub and garage screens. |
+| `menu_bg`, `title_logo` | Title screen. `menu_bg` is also the backdrop for road scenes in the story. |
+| `char_jun`, `char_sato`, `char_mia`, `char_rook`, `char_dex`, `char_ivy`, `char_ghost`, `char_unknown`, `char_rina` | Dialogue portraits, the hub header, rival cards and the results screen. |
+| `Art_Source/app_icon.png` | Android app icon, set by `Midnight Legacy > Apply Project Settings`. |
+
+Notes:
+- Only the Kairo has a side-view picture. The hatch and wedge still use the flat side drawing in the garage.
+- Spoilers and the wheel styles do not show on the painted top-down cars (the art already has its own). Decals do.
+- `ArtLoader.Enabled = false` turns all painted art off, which is handy for checking performance.
+- `store_feature` (the Play Store banner) is not in the project on purpose. Upload it in the Play Console.

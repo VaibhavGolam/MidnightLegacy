@@ -42,7 +42,7 @@ namespace MidnightLegacy
                 Item it = Items[i];
                 bool owned = iap != null && iap.IsOwned(it.id);
                 Rect r = new Rect(0f, y, w, 212f);
-                UIKit.Round(r, UIKit.PanelLight);
+                UIKit.Tile(r, UIKit.PanelLight);
                 UIKit.Label(new Rect(28f, y + 14f, w - 330f, 44f), it.title, 36, UIKit.Text, TextAnchor.UpperLeft, true);
                 UIKit.Label(new Rect(28f, y + 64f, w - 330f, 130f), it.desc, 24, UIKit.Dim, TextAnchor.UpperLeft, false, true);
 

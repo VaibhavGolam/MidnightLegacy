@@ -109,15 +109,16 @@ namespace MidnightLegacy
             Rect pb = new Rect(UIKit.W - 24f - 104f, safe.y + 16f, 104f, 104f);
             if (!s.Paused && race.State != RaceState.Finished)
             {
-                UIKit.Round(pb, new Color(0f, 0f, 0f, 0.5f));
-                UIKit.Label(pb, "II", 44, UIKit.Text, TextAnchor.MiddleCenter, true);
+                UIKit.Tile(pb, new Color(0.02f, 0.03f, 0.07f, 0.6f));
+                UIKit.Fill(new Rect(pb.x + 34f, pb.y + 30f, 14f, 44f), UIKit.Text);
+                UIKit.Fill(new Rect(pb.x + 56f, pb.y + 30f, 14f, 44f), UIKit.Text);
                 if (UIKit.Tap(pb)) { s.SetPaused(true); AudioManager.Ui(Sfx.Click); }
             }
 
             if (s.Tuning != null && !s.Paused && !s.Tuning.Visible)
             {
                 Rect tb = new Rect(UIKit.W - 24f - 190f, UIKit.H * 0.50f, 190f, 80f);
-                UIKit.Round(tb, new Color(0f, 0f, 0f, 0.5f));
+                UIKit.Tile(tb, new Color(0.02f, 0.03f, 0.07f, 0.6f));
                 UIKit.Label(tb, "TUNE", 30, UIKit.Accent, TextAnchor.MiddleCenter, true);
                 if (UIKit.Tap(tb)) s.Tuning.Visible = true;
             }
@@ -166,7 +167,8 @@ namespace MidnightLegacy
 
         static void DrawButton(Rect r, string label, bool pressed, float fill, Color tint)
         {
-            UIKit.Round(r, new Color(0f, 0f, 0f, 0.45f));
+            UIKit.Round(r, new Color(0.02f, 0.03f, 0.07f, 0.5f));
+            UIKit.Outline(r, new Color(tint.r, tint.g, tint.b, pressed ? 0.9f : 0.45f));
             if (fill > 0.001f)
             {
                 float w = Mathf.Max(r.height * 0.5f, r.width * Mathf.Clamp01(fill));
@@ -187,6 +189,7 @@ namespace MidnightLegacy
             float y = safe.y + 14f;
 
             // speed
+            UIKit.Tile(new Rect(14f, y - 8f, 350f, 186f), new Color(0.02f, 0.03f, 0.07f, 0.55f));
             UIKit.Label(new Rect(28f, y, 400f, 100f), Mathf.RoundToInt(car.SpeedKph).ToString(), 92, UIKit.Text, TextAnchor.UpperLeft, true);
             UIKit.Label(new Rect(32f, y + 92f, 200f, 34f), "KM/H", 24, UIKit.Dim, TextAnchor.UpperLeft, true);
 
@@ -207,7 +210,11 @@ namespace MidnightLegacy
                 else if (def.kind == RaceKind.Chase) timer = UIKit.Clock(Mathf.Max(0f, race.TimeLeft));
                 else timer = UIKit.Clock(race.Elapsed);
             }
-            if (timer != null) UIKit.Label(new Rect(UIKit.W * 0.5f - 200f, y, 400f, 70f), timer, 56, tcol, TextAnchor.UpperCenter, true);
+            if (timer != null)
+            {
+                UIKit.Tile(new Rect(UIKit.W * 0.5f - 175f, y - 6f, 350f, 78f), new Color(0.02f, 0.03f, 0.07f, 0.55f));
+                UIKit.Label(new Rect(UIKit.W * 0.5f - 200f, y, 400f, 70f), timer, 56, tcol, TextAnchor.UpperCenter, true);
+            }
 
             // mode specific line under the timer
             string line = null;

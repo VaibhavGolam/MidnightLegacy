@@ -105,19 +105,31 @@ namespace MidnightLegacy
         void DrawTopBar(Rect safe, SaveData save)
         {
             float y = safe.y + 14f;
-            Rect left = new Rect(20f, y, 520f, 84f);
-            UIKit.Round(left, new Color(0f, 0f, 0f, 0.5f));
-            UIKit.Label(new Rect(left.x + 24f, left.y + 6f, left.width - 40f, 44f), save.playerName, 34, UIKit.Text, TextAnchor.MiddleLeft, true);
-            UIKit.Label(new Rect(left.x + 24f, left.y + 44f, left.width - 40f, 34f), "REP " + save.rep, 26, UIKit.Accent, TextAnchor.MiddleLeft, true);
+            Rect left = new Rect(20f, y, 540f, 96f);
+            UIKit.Tile(left, new Color(0.02f, 0.03f, 0.07f, 0.72f));
+            float tx = left.x + 24f;
+            Texture2D face = UIKit.Portrait("jun");
+            if (face != null)
+            {
+                Rect fr = new Rect(left.x + 10f, left.y + 10f, 76f, 76f);
+                UIKit.Image(fr, face, Color.white);
+                UIKit.Outline(new Rect(fr.x - 3f, fr.y - 3f, fr.width + 6f, fr.height + 6f), new Color(UIKit.Accent.r, UIKit.Accent.g, UIKit.Accent.b, 0.8f));
+                tx = fr.xMax + 22f;
+            }
+            UIKit.Label(new Rect(tx, left.y + 8f, left.xMax - tx - 16f, 46f), save.playerName, 36, UIKit.Text, TextAnchor.MiddleLeft, true);
+            UIKit.Label(new Rect(tx, left.y + 52f, left.xMax - tx - 16f, 34f), "REP " + save.rep, 26, UIKit.Accent, TextAnchor.MiddleLeft, true);
 
-            Rect right = new Rect(UIKit.W - 20f - 360f, y, 360f, 84f);
-            UIKit.Round(right, new Color(0f, 0f, 0f, 0.5f));
-            UIKit.Label(new Rect(right.x, right.y, right.width - 28f, right.height), UIKit.Money(save.cash), 40, UIKit.Gold, TextAnchor.MiddleRight, true);
+            Rect right = new Rect(UIKit.W - 20f - 360f, y, 360f, 96f);
+            UIKit.Tile(right, new Color(0.02f, 0.03f, 0.07f, 0.72f));
+            UIKit.Circle(new Rect(right.x + 22f, right.y + 28f, 40f, 40f), UIKit.Gold);
+            UIKit.Label(new Rect(right.x + 22f, right.y + 28f, 40f, 40f), "$", 26, new Color(0.25f, 0.17f, 0.02f), TextAnchor.MiddleCenter, true);
+            UIKit.Label(new Rect(right.x + 70f, right.y, right.width - 94f, right.height), UIKit.Money(save.cash).Replace("$", ""), 42, UIKit.Gold, TextAnchor.MiddleRight, true);
         }
 
         void DrawTabBar(Rect r, SaveData save)
         {
             UIKit.Fill(r, new Color(0.03f, 0.035f, 0.08f, 0.97f));
+            UIKit.Fill(new Rect(r.x, r.y, r.width, 2f), new Color(UIKit.Accent.r, UIKit.Accent.g, UIKit.Accent.b, 0.35f));
             float w = UIKit.W / 6f;
             for (int i = 0; i < 6; i++)
             {
@@ -130,8 +142,8 @@ namespace MidnightLegacy
                 }
                 if (sel)
                 {
+                    UIKit.Fade(new Rect(tr.x + 6f, tr.y + 2f, tr.width - 12f, tr.height - 2f), new Color(UIKit.Accent.r, UIKit.Accent.g, UIKit.Accent.b, 0.30f), true);
                     UIKit.Fill(new Rect(tr.x + 16f, tr.y, tr.width - 32f, 6f), UIKit.Accent);
-                    UIKit.Fill(tr, new Color(1f, 1f, 1f, 0.05f));
                 }
                 UIKit.Label(tr, TabNames[i], 25, sel ? UIKit.Text : UIKit.Dim, TextAnchor.MiddleCenter, true);
 
@@ -174,18 +186,34 @@ namespace MidnightLegacy
             }
             else
             {
-                UIKit.Label(new Rect(0f, y, w, 40f), "CHAPTER " + step.chapter, 28, UIKit.Accent, TextAnchor.UpperLeft, true);
+                RaceDef rd = step.kind == StepKind.Race ? ContentDB.Race(step.refId) : null;
+                Texture2D hero = RivalFace(rd);
+                float tw = hero != null ? w - 270f : w;
+                if (hero != null)
+                {
+                    Rect hr = new Rect(w - 250f, y + 4f, 240f, 240f);
+                    UIKit.Image(hr, hero, Color.white);
+                    UIKit.Outline(new Rect(hr.x - 4f, hr.y - 4f, hr.width + 8f, hr.height + 8f), new Color(1f, 1f, 1f, 0.3f));
+                    RivalDef rvd = ContentDB.Rival(rd.rival);
+                    if (rvd != null)
+                    {
+                        Rect nm = new Rect(hr.x, hr.yMax - 50f, hr.width, 50f);
+                        UIKit.Fade(new Rect(hr.x, hr.yMax - 90f, hr.width, 90f), new Color(0f, 0f, 0.02f, 0.85f), false);
+                        UIKit.Label(nm, rvd.name, 26, Color.white, TextAnchor.MiddleCenter, true);
+                    }
+                }
+                UIKit.Label(new Rect(0f, y, tw, 40f), "CHAPTER " + step.chapter, 28, UIKit.Accent, TextAnchor.UpperLeft, true);
                 y += 44f;
-                UIKit.Label(new Rect(0f, y, w, 70f), step.title, 50, UIKit.Text, TextAnchor.UpperLeft, true);
+                UIKit.Label(new Rect(0f, y, tw, 70f), step.title, hero != null ? 44 : 50, UIKit.Text, TextAnchor.UpperLeft, true);
                 y += 80f;
 
                 string desc;
-                RaceDef rd = step.kind == StepKind.Race ? ContentDB.Race(step.refId) : null;
                 if (rd != null) desc = rd.blurb + "\n" + RaceMeta(rd);
                 else desc = "A story scene.";
-                float dh = UIKit.TextHeight(desc, 30, w);
-                UIKit.Label(new Rect(0f, y, w, dh), desc, 30, UIKit.Dim, TextAnchor.UpperLeft, false, true);
+                float dh = UIKit.TextHeight(desc, 30, tw);
+                UIKit.Label(new Rect(0f, y, tw, dh), desc, 30, UIKit.Dim, TextAnchor.UpperLeft, false, true);
                 y += dh + 20f;
+                if (hero != null && y < 270f) y = 270f;
 
                 if (rd != null)
                 {
@@ -284,7 +312,7 @@ namespace MidnightLegacy
             UIKit.Label(new Rect(0f, y, w, 50f), "FREE DRIVE", 30, UIKit.Accent, TextAnchor.UpperLeft, true);
             y += 56f;
             Rect fd = new Rect(0f, y, w, 480f);
-            UIKit.Round(fd, UIKit.PanelLight);
+            UIKit.Tile(fd, UIKit.PanelLight);
             UIKit.Label(new Rect(28f, y + 14f, w - 56f, 40f), "Drive anywhere, no timer. Pays nothing, costs nothing.", 26, UIKit.Dim, TextAnchor.UpperLeft);
             string[] themes = { "forest", "pass", "coast", "city" };
             string[] times = { "night", "midnight", "dusk", "dawn" };
@@ -301,7 +329,7 @@ namespace MidnightLegacy
             if (!save.HasFlag("legend_unlocked"))
             {
                 Rect lk = new Rect(0f, y, w, 130f);
-                UIKit.Round(lk, UIKit.PanelLight);
+                UIKit.Tile(lk, UIKit.PanelLight);
                 UIKit.Label(new Rect(28f, y, w - 56f, 130f), "Finish the story to unlock endless Ghost Runs and the Daily Run.", 28, UIKit.Dim, TextAnchor.MiddleLeft, false, true);
                 y += 144f;
             }
@@ -323,18 +351,37 @@ namespace MidnightLegacy
             return scroll;
         }
 
+        static Texture2D RivalFace(RaceDef d)
+        {
+            if (d == null || string.IsNullOrEmpty(d.rival)) return null;
+            RivalDef rv = ContentDB.Rival(d.rival);
+            return rv != null ? UIKit.Portrait(rv.character) : null;
+        }
+
         void DrawEventCard(Rect r, RaceDef d, SaveData save)
         {
             string why;
             bool ok = app.RaceUnlocked(d, out why);
-            UIKit.Round(r, ok ? UIKit.PanelLight : new Color(0.07f, 0.08f, 0.14f, 0.95f));
+            UIKit.Tile(r, ok ? UIKit.PanelLight : new Color(0.07f, 0.08f, 0.14f, 0.95f));
             Color tc = ok ? UIKit.Text : UIKit.Dim;
-            UIKit.Label(new Rect(r.x + 28f, r.y + 12f, r.width - 260f, 44f), d.title, 36, tc, TextAnchor.UpperLeft, true);
-            UIKit.Label(new Rect(r.x + 28f, r.y + 58f, r.width - 260f, 70f), d.blurb, 24, UIKit.Dim, TextAnchor.UpperLeft, false, true);
-            UIKit.Label(new Rect(r.x + 28f, r.y + 128f, r.width - 260f, 30f), RaceMeta(d), 21, new Color(UIKit.Accent.r, UIKit.Accent.g, UIKit.Accent.b, ok ? 1f : 0.5f), TextAnchor.UpperLeft);
+
+            // the rival's portrait on the left of the card, when there is one
+            float tx = r.x + 28f, tw = r.width - 260f;
+            Texture2D face = RivalFace(d);
+            if (face != null)
+            {
+                Rect fr = new Rect(r.x + 18f, r.y + 18f, r.height - 36f, r.height - 36f);
+                UIKit.Image(fr, face, ok ? Color.white : new Color(0.55f, 0.55f, 0.6f, 1f));
+                UIKit.Outline(new Rect(fr.x - 3f, fr.y - 3f, fr.width + 6f, fr.height + 6f), new Color(1f, 1f, 1f, ok ? 0.28f : 0.12f));
+                tx = fr.xMax + 24f;
+                tw -= fr.width + 0f;
+            }
+            UIKit.Label(new Rect(tx, r.y + 12f, tw, 44f), d.title, 36, tc, TextAnchor.UpperLeft, true);
+            UIKit.Label(new Rect(tx, r.y + 58f, tw, 70f), d.blurb, 24, UIKit.Dim, TextAnchor.UpperLeft, false, true);
+            UIKit.Label(new Rect(tx, r.y + 128f, tw, 30f), RaceMeta(d), 21, new Color(UIKit.Accent.r, UIKit.Accent.g, UIKit.Accent.b, ok ? 1f : 0.5f), TextAnchor.UpperLeft);
 
             string reward = d.kind == RaceKind.Endless ? "Score on the board" : UIKit.Money(d.rewardCash) + "  +" + d.rewardRep + " rep";
-            UIKit.Label(new Rect(r.x + 28f, r.y + 158f, r.width - 260f, 30f), reward, 23, UIKit.Gold, TextAnchor.UpperLeft, true);
+            UIKit.Label(new Rect(tx, r.y + 158f, tw, 30f), reward, 23, UIKit.Gold, TextAnchor.UpperLeft, true);
 
             BestEntry best = save.GetBest(d.id);
             if (best != null && best.medal > 0)
@@ -386,7 +433,7 @@ namespace MidnightLegacy
 
                     float th = UIKit.TextHeight(m.text, 28, w - 80f);
                     Rect r = new Rect(0f, y, w, th + 90f);
-                    UIKit.Round(r, isNote ? new Color(0.17f, 0.14f, 0.09f, 0.96f) : UIKit.PanelLight);
+                    UIKit.Tile(r, isNote ? new Color(0.17f, 0.14f, 0.09f, 0.96f) : UIKit.PanelLight);
                     bool unread = !save.readMessages.Contains(m.id);
                     UIKit.Label(new Rect(28f, y + 12f, w - 120f, 36f), m.from, 28, isNote ? UIKit.Gold : UIKit.Accent, TextAnchor.UpperLeft, true);
                     if (unread) UIKit.Circle(new Rect(w - 52f, y + 18f, 24f, 24f), UIKit.Bad);
@@ -428,7 +475,7 @@ namespace MidnightLegacy
             {
                 int col = i % 2, row = i / 2;
                 Rect c = new Rect(col * (half + 12f), y + row * 104f, half, 92f);
-                UIKit.Round(c, UIKit.PanelLight);
+                UIKit.Tile(c, UIKit.PanelLight);
                 UIKit.Label(new Rect(c.x + 20f, c.y + 6f, c.width - 40f, 34f), k[i], 24, UIKit.Dim, TextAnchor.UpperLeft);
                 UIKit.Label(new Rect(c.x + 20f, c.y + 38f, c.width - 40f, 46f), v[i], 36, UIKit.Text, TextAnchor.UpperLeft, true);
             }

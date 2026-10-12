@@ -24,6 +24,16 @@ namespace MidnightLegacy
         GameObject carRoot, cover, underGo;
         NightLighting lighting;
         Mesh roomMesh, roomGlowMesh, carMesh, carGlowMesh, carUnderMesh, coverMesh, shadowMesh;
+        Mesh bodySpriteMesh, wheelSpriteMesh;
+        GameObject bodySpriteGo, wheelSpriteGo;
+        bool paintedCar;                   // car_side_kairo is in the project
+        readonly SpriteBatch spriteBatch = new SpriteBatch();
+
+        // geometry of the painted side car (see car_side_kairo.png): metres, in the car's drawing frame
+        const float ArtCarLength = 4.2f;
+        const float ArtCarCentreX = 0.015f;
+        const float ArtCarBottomZ = 0.04f;
+        const float ArtRearWheelX = -1.185f, ArtFrontWheelX = 1.26f, ArtWheelZ = 0.32f, ArtWheelSize = 0.66f;
         readonly MeshBuilder carBuilder = new MeshBuilder();
         readonly MeshBuilder glowBuilder = new MeshBuilder();
         readonly MeshBuilder underBuilder = new MeshBuilder();
@@ -68,6 +78,18 @@ namespace MidnightLegacy
             underGo.transform.localPosition = new Vector3(0f, 0.01f, 0.04f);
             underGo.transform.localScale = new Vector3(2.7f, 1f, 0.55f);
             underGo.SetActive(false);
+
+            // painted side car: wheels sit just behind the body so they show through the open arches
+            paintedCar = ArtLoader.Has("car_side_kairo") && ArtLoader.Sprite("car_side_kairo", 2, 0.5f) != null;
+            if (paintedCar)
+            {
+                bodySpriteMesh = new Mesh { name = "StageCarSprite" };
+                wheelSpriteMesh = new Mesh { name = "StageWheelSprite" };
+                bodySpriteGo = MakeMesh("CarSprite", carRoot.transform, bodySpriteMesh, ArtLoader.Sprite("car_side_kairo", 2, 0.5f));
+                wheelSpriteGo = MakeMesh("WheelSprites", carRoot.transform, wheelSpriteMesh, ArtLoader.Sprite("wheel_side_five", 1, 0.5f) ?? MLMaterials.Opaque());
+                bodySpriteGo.SetActive(false);
+                wheelSpriteGo.SetActive(false);
+            }
 
             MeshBuilder mb = new MeshBuilder();
             mb.AddDisc(Vector3.zero, 1f, 20, Color.black, 0.62f, 0f);
@@ -124,11 +146,46 @@ namespace MidnightLegacy
             carBuilder.Clear();
             glowBuilder.Clear();
             underBuilder.Clear();
+            if (look == null) look = new CarLook();
             SideCar.Build(carBuilder, glowBuilder, underBuilder, look);
+
+            // the painted Kairo replaces the flat body and wheels; the beam and underglow still come from SideCar
+            bool painted = paintedCar && look.style == 0;
+            if (paintedCar)
+            {
+                bodySpriteGo.SetActive(painted);
+                wheelSpriteGo.SetActive(painted);
+            }
+            if (painted)
+            {
+                carBuilder.Clear();
+                BuildPaintedCar(look);
+            }
             carBuilder.Build(carMesh);
             glowBuilder.Build(carGlowMesh);
             underBuilder.Build(carUnderMesh);
             underGo.SetActive(underBuilder.VertexCount > 0);
+        }
+
+        void BuildPaintedCar(CarLook look)
+        {
+            float h = ArtCarLength / ArtLoader.Aspect("car_side_kairo");
+            spriteBatch.Clear();
+            spriteBatch.Add(ArtCarCentreX, ArtCarBottomZ + h * 0.5f, 0.05f, ArtCarLength * 0.5f, h * 0.5f, 0f, new Rect(0f, 0f, 1f, 1f), look.body);
+            spriteBatch.Build(bodySpriteMesh);
+
+            // wheels: a hue-only tint of the rim colour, so the silver art takes the rim colour picked in the garage
+            Color rim = look.rim;
+            float m = Mathf.Max(0.05f, Mathf.Max(rim.r, Mathf.Max(rim.g, rim.b)));
+            Color tint = Color.Lerp(Color.white, new Color(rim.r / m, rim.g / m, rim.b / m, 1f), 0.85f);
+            spriteBatch.Clear();
+            Rect full = new Rect(0f, 0f, 1f, 1f);
+            spriteBatch.Add(ArtRearWheelX, ArtWheelZ, -0.05f, ArtWheelSize * 0.5f, ArtWheelSize * 0.5f, 0f, full, tint);
+            spriteBatch.Add(ArtFrontWheelX, ArtWheelZ, -0.05f, ArtWheelSize * 0.5f, ArtWheelSize * 0.5f, 0f, full, tint, true);
+            spriteBatch.Build(wheelSpriteMesh);
+            string wheelArt = look.rimStyle == 2 ? "wheel_side_mesh" : (look.rimStyle == 1 ? "wheel_side_five" : "wheel_side_bar");
+            Material wm = ArtLoader.Sprite(wheelArt, 1, 0.5f);
+            if (wm != null) wheelSpriteGo.GetComponent<MeshRenderer>().sharedMaterial = wm;
         }
 
         public void SetCover(bool covered)
@@ -161,8 +218,49 @@ namespace MidnightLegacy
             return new Color(Mathf.Clamp01(c.r * f), Mathf.Clamp01(c.g * f), Mathf.Clamp01(c.b * f), 1f);
         }
 
+        /// <summary>
+        /// The painted garage (garage_bg) as the back wall and floor. The picture is 16:9 and the stage is a tall portrait, so the
+        /// picture covers the middle and its top and bottom rows are stretched (and faded) to fill the rest.
+        /// Returns false when the art is not in the project, then the flat room is drawn instead.
+        /// </summary>
+        bool BuildPaintedRoom()
+        {
+            Material mat = ArtLoader.Sprite("garage_bg", -30, 0f);
+            if (mat == null) return false;
+
+            const float imgH = 4.6f;
+            const float wallBaseFromTop = 0.655f;     // where the wall meets the floor in the picture
+            const float floorZ = 0.95f;               // that line sits this far above the car's wheels (the car stands in front of the wall)
+            float imgW = imgH * ArtLoader.Aspect("garage_bg");
+            float zTop = floorZ + wallBaseFromTop * imgH;
+            float zBottom = zTop - imgH;
+            float far = 40f;
+            Color dim = new Color(0.92f, 0.92f, 0.92f, 1f);
+
+            SpriteBatch sb = new SpriteBatch();
+            sb.Add(0f, (zTop + zBottom) * 0.5f, -5f, imgW * 0.5f, imgH * 0.5f, 0f, new Rect(0f, 0f, 1f, 1f), dim);
+            // above and below: one flat colour taken from the picture's top and bottom edge, faded in so there is no seam
+            Rect topTexel = new Rect(0.5f, 1f, 0f, 0f), bottomTexel = new Rect(0.5f, 0f, 0f, 0f);
+            Color clear = new Color(0.6f, 0.6f, 0.6f, 0f), mid = new Color(0.6f, 0.6f, 0.6f, 1f), deep = new Color(0.3f, 0.3f, 0.3f, 1f);
+            sb.AddFade(0f, zTop + 1.2f, -5f, far, 1.2f, topTexel, mid, clear);
+            sb.Add(0f, zTop + 2.4f + far * 0.5f, -5f, far, far * 0.5f, 0f, topTexel, mid);
+            sb.AddFade(0f, zBottom - 2f, -5f, far, 2f, bottomTexel, clear, deep);
+            sb.Add(0f, zBottom - 4f - far * 0.5f, -5f, far, far * 0.5f, 0f, bottomTexel, deep);
+            // either side of the picture (wide screens): the edge columns
+            sb.Add(-(imgW * 0.5f + far * 0.5f), (zTop + zBottom) * 0.5f, -5f, far * 0.5f, imgH * 0.5f, 0f, new Rect(0f, 0f, 0f, 1f), dim);
+            sb.Add(imgW * 0.5f + far * 0.5f, (zTop + zBottom) * 0.5f, -5f, far * 0.5f, imgH * 0.5f, 0f, new Rect(1f, 0f, 0f, 1f), dim);
+
+            roomMesh = sb.ToMesh("GarageRoomPainted");
+            roomGlowMesh = new Mesh { name = "GarageRoomGlow" };
+            room = new GameObject("Room").transform;
+            room.SetParent(view, false);
+            MakeMesh("RoomPainted", room, roomMesh, mat);
+            return true;
+        }
+
         void BuildRoom()
         {
+            if (BuildPaintedRoom()) return;
             MeshBuilder mb = new MeshBuilder();
             MeshBuilder gl = new MeshBuilder();
 
@@ -271,6 +369,18 @@ namespace MidnightLegacy
 
         void BuildCover()
         {
+            Material paintedCover = ArtLoader.Sprite("car_cover", 3, 0.5f);
+            if (paintedCover != null)
+            {
+                float cl = 4.55f;
+                float ch = cl / ArtLoader.Aspect("car_cover");
+                SpriteBatch cb = new SpriteBatch();
+                cb.Add(0f, ch * 0.5f - 0.02f, 0f, cl * 0.5f, ch * 0.5f, 0f, new Rect(0f, 0f, 1f, 1f), Color.white);
+                coverMesh = cb.ToMesh("CarCoverPainted");
+                cover = MakeMesh("Cover", view, coverMesh, paintedCover);
+                cover.transform.localPosition = new Vector3(0f, CarDepth + 0.45f, 0f);
+                return;
+            }
             MeshBuilder mb = new MeshBuilder();
             Vector2[] pts = Flat.Pts(-2.2f, 0.0f, -2.18f, 0.55f, -2.1f, 0.95f, -1.5f, 1.05f, -0.8f, 1.38f, -0.1f, 1.5f, 0.6f, 1.42f,
                 1.1f, 1.08f, 1.8f, 0.92f, 2.18f, 0.68f, 2.24f, 0.3f, 2.2f, 0.0f);
@@ -329,7 +439,7 @@ namespace MidnightLegacy
 
         void OnDestroy()
         {
-            Mesh[] all = { roomMesh, roomGlowMesh, carMesh, carGlowMesh, carUnderMesh, coverMesh, shadowMesh };
+            Mesh[] all = { roomMesh, roomGlowMesh, carMesh, carGlowMesh, carUnderMesh, coverMesh, shadowMesh, bodySpriteMesh, wheelSpriteMesh };
             for (int i = 0; i < all.Length; i++) if (all[i] != null) Destroy(all[i]);
         }
     }
