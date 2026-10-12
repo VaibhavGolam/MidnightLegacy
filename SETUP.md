@@ -151,3 +151,5 @@ Everything painted is optional. Without a file the game draws a plain version. D
 | Garage parts | `part_engine`, `part_tires`, `part_suspension`, `part_brakes`, `part_lightweight`, `part_aero`, `part_nitro`, `part_frame` |
 
 Mail portraits use the existing `char_*` files (sato, mia, rook, dex, ivy, rina, ghost, jun).
+
+Delivered so far (already in `Resources/Art/`): `scene_room`, `scene_phone`, `scene_city`, `scene_road`, `ui_panel`, `ui_pad`, `ui_btn_round`, `ui_button_primary/secondary/gold/danger`, `ui_icon_brake/nitro/drift/reverse/arrow/pause`, `ui_medal`. Still to generate: `scene_pass` and everything in sections D to G of `UI_ART_PROMPTS.md`.
