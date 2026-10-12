@@ -16,7 +16,7 @@ namespace MidnightLegacy.EditorTools
     {
         const string ArtFolder = "Assets/_Project/Resources/Art/";
         const string IconPath = "Assets/_Project/Art_Source/app_icon.png";
-        const string DoneKey = "MidnightLegacy.ArtImported.v1";
+        const string DoneKey = "MidnightLegacy.ArtImported.v2";
 
         void OnPreprocessTexture()
         {
@@ -25,16 +25,19 @@ namespace MidnightLegacy.EditorTools
             if (!art && !icon) return;
 
             TextureImporter ti = (TextureImporter)assetImporter;
+            string file = Path.GetFileNameWithoutExtension(assetPath);
+            bool ui = file.StartsWith("ui_");
             ti.textureType = TextureImporterType.Default;
             ti.npotScale = TextureImporterNPOTScale.None;
             ti.wrapMode = TextureWrapMode.Clamp;
             ti.isReadable = false;
-            ti.maxTextureSize = 2048;
-            ti.textureCompression = icon ? TextureImporterCompression.Uncompressed : TextureImporterCompression.Compressed;
+            ti.maxTextureSize = ui ? 1024 : 2048;
+            // interface pictures stay uncompressed: buttons and panels have soft edges that block compression would smear
+            ti.textureCompression = (icon || ui) ? TextureImporterCompression.Uncompressed : TextureImporterCompression.Compressed;
             ti.alphaIsTransparency = assetPath.EndsWith(".png");
 
-            string file = Path.GetFileNameWithoutExtension(assetPath);
-            bool screenPicture = icon || file.StartsWith("char_") || file == "menu_bg" || file == "garage_bg" || file == "title_logo";
+            bool screenPicture = icon || ui || file.StartsWith("char_") || file.StartsWith("scene_")
+                                 || file == "menu_bg" || file == "garage_bg" || file == "title_logo";
             ti.mipmapEnabled = !screenPicture;
             ti.filterMode = FilterMode.Bilinear;
         }

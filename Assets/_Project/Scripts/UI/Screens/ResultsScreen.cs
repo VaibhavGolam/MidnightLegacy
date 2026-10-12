@@ -70,7 +70,9 @@ namespace MidnightLegacy
                     Color mc = i == 2 ? UIKit.Gold : (i == 1 ? new Color(0.8f, 0.82f, 0.88f) : new Color(0.8f, 0.55f, 0.32f));
                     float pop = Mathf.Clamp01((t - 0.25f - i * 0.25f) * 4f);
                     float s = 96f * (got ? pop : 1f);
-                    UIKit.Circle(new Rect(UIKit.W * 0.5f - 160f + i * 112f + (96f - s) * 0.5f, y + (96f - s) * 0.5f, s, s), got ? mc : new Color(1f, 1f, 1f, 0.1f));
+                    Rect mr = new Rect(UIKit.W * 0.5f - 160f + i * 112f + (96f - s) * 0.5f, y + (96f - s) * 0.5f, s, s);
+                    if (!UIKit.Icon(mr, "ui_medal", got ? mc : new Color(1f, 1f, 1f, 0.12f)))
+                        UIKit.Circle(mr, got ? mc : new Color(1f, 1f, 1f, 0.1f));
                 }
                 y += 116f;
             }
@@ -83,6 +85,7 @@ namespace MidnightLegacy
             UIKit.Label(new Rect(x, y, w, 56f), main, 44, UIKit.Text, TextAnchor.MiddleCenter, true);
             y += 60f;
             if (r.newBest) UIKit.Label(new Rect(x, y, w, 40f), "NEW BEST", 32, UIKit.Good, TextAnchor.MiddleCenter, true);
+            else if (r.usedCheckpoint) UIKit.Label(new Rect(x, y, w, 40f), "continued from a checkpoint: no gold, no best time", 24, UIKit.Dim, TextAnchor.MiddleCenter);
             y += 54f;
 
             // reward lines
@@ -114,7 +117,7 @@ namespace MidnightLegacy
             }
 
             // buttons
-            float by = Mathf.Max(y, safe.yMax - 440f);
+            float by = Mathf.Max(y, safe.yMax - 440f - (!r.won && r.canCheckpoint ? 126f : 0f));
             bool adBonus = r.won && r.bonusCash > 0 && !doubled && AdPolicy.CanOfferRewarded(AdPlacement.RewardedDoubleReward);
             bool adRevive = !r.won && r.canRevive && AdPolicy.CanOfferRewarded(AdPlacement.RewardedRevive);
 
@@ -137,6 +140,15 @@ namespace MidnightLegacy
             }
 
             float half = (w - 16f) * 0.5f;
+            if (!r.won && r.canCheckpoint)
+            {
+                if (UIKit.Button(new Rect(x, by, w, 110f), "CONTINUE FROM CHECKPOINT", BtnStyle.Primary, true, 32))
+                {
+                    app.ResultsCheckpoint();
+                    return;
+                }
+                by += 126f;
+            }
             if (r.won)
             {
                 if (UIKit.Button(new Rect(x, by, half, 110f), "RETRY", BtnStyle.Secondary)) app.ResultsRetry();

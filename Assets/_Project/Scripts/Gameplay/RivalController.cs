@@ -98,6 +98,22 @@ namespace MidnightLegacy
             Speed = Mathf.Min(Speed, 22f);
         }
 
+        /// <summary>Puts the rival back at a point on the road and holds it there until Release (restart from a checkpoint).</summary>
+        public void ResetTo(float s, float d)
+        {
+            S = s;
+            D = d;
+            prevD = d;
+            Speed = rollingSpeed;
+            Released = false;
+            Finished = false;
+            vd = 0f;
+            latVel = 0f;
+            elapsed = 0f;
+            hitCooldown = 0f;
+            Place();
+        }
+
         /// <summary>Lets the rival go (race start). Before this it holds a rolling start speed.</summary>
         public void Release()
         {

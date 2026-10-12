@@ -110,8 +110,11 @@ namespace MidnightLegacy
             if (!s.Paused && race.State != RaceState.Finished)
             {
                 UIKit.Tile(pb, new Color(0.02f, 0.03f, 0.07f, 0.6f));
-                UIKit.Fill(new Rect(pb.x + 34f, pb.y + 30f, 14f, 44f), UIKit.Text);
-                UIKit.Fill(new Rect(pb.x + 56f, pb.y + 30f, 14f, 44f), UIKit.Text);
+                if (!UIKit.Icon(new Rect(pb.x + 22f, pb.y + 22f, pb.width - 44f, pb.height - 44f), "ui_icon_pause", UIKit.Text))
+                {
+                    UIKit.Fill(new Rect(pb.x + 34f, pb.y + 30f, 14f, 44f), UIKit.Text);
+                    UIKit.Fill(new Rect(pb.x + 56f, pb.y + 30f, 14f, 44f), UIKit.Text);
+                }
                 if (UIKit.Tap(pb)) { s.SetPaused(true); AudioManager.Ui(Sfx.Click); }
             }
 
@@ -137,19 +140,19 @@ namespace MidnightLegacy
             CarController car = s.Car;
             TutorialDirector tut = s.Tutorial;
 
-            // steering zone hints
-            Rect left = UIKit.FromNormalised(InputReader.LeftZone);
-            Rect right = UIKit.FromNormalised(InputReader.RightZone);
-            float a = 0.07f + (input.LeftDown ? 0.10f : 0f);
-            UIKit.Round(new Rect(left.x + 14f, left.y + 14f, left.width - 28f, left.height - 28f), new Color(1f, 1f, 1f, a));
-            a = 0.07f + (input.RightDown ? 0.10f : 0f);
-            UIKit.Round(new Rect(right.x + 14f, right.y + 14f, right.width - 28f, right.height - 28f), new Color(1f, 1f, 1f, a));
-            UIKit.Label(left, "<", 120, new Color(1f, 1f, 1f, 0.22f), TextAnchor.MiddleCenter, true);
-            UIKit.Label(right, ">", 120, new Color(1f, 1f, 1f, 0.22f), TextAnchor.MiddleCenter, true);
+            // the two steering pads along the bottom edge
+            DrawPad(UIKit.FromNormalised(InputReader.LeftPad), true, input.LeftDown);
+            DrawPad(UIKit.FromNormalised(InputReader.RightPad), false, input.RightDown);
 
-            if (input.BrakeEnabled) DrawButton(UIKit.FromNormalised(InputReader.BrakeButton), "BRAKE", input.Brake, 0f, new Color(0.85f, 0.25f, 0.25f));
-            if (input.NitroEnabled) DrawButton(UIKit.FromNormalised(InputReader.NitroButton), "NITRO", input.Nitro || car.NitroActive, car.NitroCharge, new Color(0.3f, 0.7f, 1f));
-            if (input.HandbrakeEnabled) DrawButton(UIKit.FromNormalised(InputReader.HandbrakeButton), "DRIFT", input.Handbrake, 0f, new Color(1f, 0.6f, 0.2f));
+            // the round buttons: BRAKE and REVERSE on the left, DRIFT and NITRO on the right
+            if (input.BrakeEnabled)
+                DrawRoundButton(UIKit.FromNormalised(InputReader.BrakeButton), "BRAKE", "ui_icon_brake", input.Brake, 0f, new Color(0.95f, 0.30f, 0.30f));
+            if (input.ReverseEnabled)
+                DrawRoundButton(UIKit.FromNormalised(InputReader.ReverseButton), "REV", "ui_icon_reverse", input.Reverse || car.Reversing, 0f, new Color(0.62f, 0.66f, 0.80f));
+            if (input.HandbrakeEnabled)
+                DrawRoundButton(UIKit.FromNormalised(InputReader.HandbrakeButton), "DRIFT", "ui_icon_drift", input.Handbrake, 0f, new Color(1f, 0.62f, 0.20f));
+            if (input.NitroEnabled)
+                DrawRoundButton(UIKit.FromNormalised(InputReader.NitroButton), "NITRO", "ui_icon_nitro", input.Nitro || car.NitroActive, car.NitroCharge, new Color(0.30f, 0.72f, 1f));
 
             // tutorial highlight
             if (tut != null && tut.Visible && tut.HasHighlight)
@@ -165,18 +168,76 @@ namespace MidnightLegacy
             }
         }
 
-        static void DrawButton(Rect r, string label, bool pressed, float fill, Color tint)
+        /// <summary>One steering pad: a dark glass pad with a big chevron that lights up while it is held.</summary>
+        static void DrawPad(Rect r, bool left, bool down)
         {
-            UIKit.Round(r, new Color(0.02f, 0.03f, 0.07f, 0.5f));
-            UIKit.Outline(r, new Color(tint.r, tint.g, tint.b, pressed ? 0.9f : 0.45f));
+            if (!UIKit.Skin(r, "ui_pad", 56f, 0.25f, down ? Color.white : new Color(0.78f, 0.78f, 0.84f, 0.85f)))
+            {
+                UIKit.Round(r, new Color(0.03f, 0.04f, 0.09f, down ? 0.62f : 0.42f));
+                UIKit.Outline(r, new Color(0.55f, 0.62f, 1f, down ? 0.55f : 0.22f));
+                if (down) UIKit.Round(new Rect(r.x + 6f, r.y + 6f, r.width - 12f, r.height - 12f), new Color(0.42f, 0.47f, 0.84f, 0.22f));
+            }
+            Rect ar = new Rect(r.center.x - r.height * 0.3f, r.center.y - r.height * 0.3f, r.height * 0.6f, r.height * 0.6f);
+            Color c = new Color(1f, 1f, 1f, down ? 0.95f : 0.50f);
+            if (!UIKit.Icon(ar, "ui_icon_arrow", c, left)) DrawChevron(ar, left, c);
+        }
+
+        /// <summary>A chevron drawn from two rotated bars (used when there is no arrow picture).</summary>
+        static void DrawChevron(Rect r, bool left, Color c)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            float len = r.height * 0.62f, th = Mathf.Max(10f, r.height * 0.13f);
+            float cx = r.center.x + (left ? -r.width * 0.06f : r.width * 0.06f), cy = r.center.y;
+            float off = len * 0.30f;
+            Matrix4x4 saved = GUI.matrix;
+            // for ">" the upper bar leans "\" (clockwise), the lower one "/"
+            float a1 = left ? -45f : 45f, a2 = -a1;
+            Vector2 p1 = new Vector2(cx, cy - off), p2 = new Vector2(cx, cy + off);
+            GUIUtility.RotateAroundPivot(a1, p1);
+            UIKit.Round(new Rect(p1.x - len * 0.5f, p1.y - th * 0.5f, len, th), c);
+            GUI.matrix = saved;
+            GUIUtility.RotateAroundPivot(a2, p2);
+            UIKit.Round(new Rect(p2.x - len * 0.5f, p2.y - th * 0.5f, len, th), c);
+            GUI.matrix = saved;
+        }
+
+        /// <summary>A round control button: dark glass disc with a coloured rim, an icon, a short label and (nitro) a tank fill.</summary>
+        static void DrawRoundButton(Rect r, string label, string icon, bool pressed, float fill, Color tint)
+        {
+            float d = r.width;
+            UIKit.Circle(new Rect(r.x, r.y + 6f, d, d), new Color(0f, 0f, 0f, 0.35f));
+            Rect inner = new Rect(r.x + d * 0.055f, r.y + d * 0.055f, d * 0.89f, d * 0.89f);
+
+            if (ArtLoader.Has("ui_btn_round"))
+            {
+                Color bt = pressed ? Color.Lerp(tint, Color.white, 0.45f) : new Color(tint.r * 0.9f, tint.g * 0.9f, tint.b * 0.9f, 1f);
+                UIKit.Icon(r, "ui_btn_round", bt);
+            }
+            else
+            {
+                UIKit.Circle(r, new Color(tint.r, tint.g, tint.b, pressed ? 1f : 0.70f));
+                UIKit.Circle(inner, pressed ? new Color(tint.r * 0.45f, tint.g * 0.45f, tint.b * 0.45f, 1f) : new Color(0.035f, 0.045f, 0.10f, 0.94f));
+                // a soft highlight on the upper half gives the disc some body
+                UIKit.Circle(new Rect(inner.x + d * 0.12f, inner.y + d * 0.05f, inner.width - d * 0.24f, inner.height * 0.42f), new Color(1f, 1f, 1f, pressed ? 0.04f : 0.07f));
+            }
+
             if (fill > 0.001f)
             {
-                float w = Mathf.Max(r.height * 0.5f, r.width * Mathf.Clamp01(fill));
-                UIKit.Round(new Rect(r.x, r.y, w, r.height), new Color(tint.r, tint.g, tint.b, 0.35f));
+                Rect tank = new Rect(inner.x + d * 0.03f, inner.y + d * 0.03f, inner.width - d * 0.06f, inner.height - d * 0.06f);
+                UIKit.DiscFill(tank, new Color(tint.r, tint.g, tint.b, fill >= 0.99f ? 0.55f : 0.38f), fill);
             }
-            if (pressed) UIKit.Round(r, new Color(tint.r, tint.g, tint.b, 0.55f));
-            bool ready = fill >= 0.99f;
-            UIKit.Label(r, label, 34, ready ? Color.white : new Color(1f, 1f, 1f, 0.85f), TextAnchor.MiddleCenter, true);
+
+            Color fg = pressed ? Color.white : new Color(1f, 1f, 1f, 0.92f);
+            bool hasIcon = ArtLoader.Has(icon);
+            if (hasIcon)
+            {
+                UIKit.Icon(new Rect(r.x + d * 0.25f, r.y + d * 0.15f, d * 0.5f, d * 0.5f), icon, fg);
+                UIKit.Label(new Rect(r.x, r.y + d * 0.64f, d, d * 0.22f), label, Mathf.RoundToInt(d * 0.145f), fg, TextAnchor.MiddleCenter, true);
+            }
+            else
+            {
+                UIKit.Label(r, label, Mathf.RoundToInt(d * 0.17f), fg, TextAnchor.MiddleCenter, true);
+            }
         }
 
         // ------------------------------------------------------------------ top area
@@ -262,6 +323,16 @@ namespace MidnightLegacy
             {
                 Rect pr = new Rect(UIKit.W * 0.5f - 250f, y + 112f, 500f, 14f);
                 UIKit.Bar(pr, race.Progress01, UIKit.Accent, new Color(0f, 0f, 0f, 0.5f));
+                if (race.CheckpointSpacing > 0f)
+                {
+                    float span = race.FinishS - race.StartS;
+                    int k = 1;
+                    for (float cs = race.CheckpointSpacing; cs < span - 60f && k < 30; cs += race.CheckpointSpacing, k++)
+                    {
+                        Color tc = k <= race.Checkpoints ? UIKit.Gold : new Color(1f, 1f, 1f, 0.55f);
+                        UIKit.Fill(new Rect(pr.x + pr.width * (cs / span) - 2f, pr.y - 6f, 4f, pr.height + 12f), tc);
+                    }
+                }
                 if (race.Rival != null && def.kind != RaceKind.Escape)
                 {
                     float rp = Mathf.Clamp01((race.Rival.S - race.StartS) / (race.FinishS - race.StartS));
@@ -374,6 +445,11 @@ namespace MidnightLegacy
                     s.SetPaused(false);
                     s.Race.EndEndless();
                 }
+                y += 130f;
+            }
+            if (s.Race.HasCheckpoint && def.kind != RaceKind.Endless)
+            {
+                if (UIKit.Button(new Rect(x, y, w, 110f), "FROM LAST CHECKPOINT", BtnStyle.Primary, true, 34)) { s.RestartFromCheckpoint(); }
                 y += 130f;
             }
             if (UIKit.Button(new Rect(x, y, w, 110f), "RESTART", BtnStyle.Secondary)) { s.Restart(); }

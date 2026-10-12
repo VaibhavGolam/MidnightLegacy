@@ -23,6 +23,14 @@ namespace MidnightLegacy
         public int Hits { get { return wallHits + trafficHits; } }
         public bool Perfect { get { return wallHits == 0 && trafficHits == 0; } }
 
+        public void CopyFrom(RunStats o)
+        {
+            wallHits = o.wallHits; trafficHits = o.trafficHits; nearMisses = o.nearMisses; cleanCorners = o.cleanCorners;
+            cleanSectors = o.cleanSectors; drifts = o.drifts; driftScore = o.driftScore; bestDrift = o.bestDrift;
+            styleScore = o.styleScore; maxCombo = o.maxCombo; distance = o.distance; time = o.time;
+            topSpeedKph = o.topSpeedKph; damageTaken = o.damageTaken;
+        }
+
         public void Reset()
         {
             wallHits = 0; trafficHits = 0; nearMisses = 0; cleanCorners = 0; cleanSectors = 0;
@@ -156,7 +164,7 @@ namespace MidnightLegacy
             if (dt <= 0f) return;
 
             Stats.time += dt;
-            Stats.distance = car.S - startS;
+            Stats.distance = Mathf.Max(Stats.distance, car.S - startS);
             Stats.topSpeedKph = Mathf.Max(Stats.topSpeedKph, car.SpeedKph);
             Stats.damageTaken = Mathf.Max(0f, car.Damage01 - startDamage);
 

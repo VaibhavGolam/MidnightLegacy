@@ -136,7 +136,13 @@ namespace MidnightLegacy
             {
                 if (!DrawPaintedBackground(def.bg)) DrawBackground(def.bg);
             }
-            else UIKit.Fill(new Rect(0f, UIKit.H * 0.48f, UIKit.W, UIKit.H * 0.52f), new Color(0f, 0f, 0f, 0.35f));
+            else
+            {
+                // the 3D garage only fills the top; carry its floor colour down behind the text so there is no black gap
+                Color floor = new Color(0.055f, 0.05f, 0.07f, 1f);
+                UIKit.Fade(new Rect(0f, UIKit.H * 0.27f, UIKit.W, UIKit.H * 0.16f), floor, false);
+                UIKit.Fill(new Rect(0f, UIKit.H * 0.43f, UIKit.W, UIKit.H * 0.57f), floor);
+            }
 
             // full screen tap: finish typing, then advance
             bool hasChoices = node.choices != null && node.choices.Length > 0;
@@ -150,7 +156,9 @@ namespace MidnightLegacy
 
             // portrait
             bool isNarr = speaker == null || node.speaker == "narr";
-            float boxH = hasChoices && done ? 300f + node.choices.Length * 128f : 440f;
+            // the box fits its text (measured on the whole line, so it does not grow while typing)
+            float textH = UIKit.TextHeight(fullText, 36, UIKit.W - 60f - 80f);
+            float boxH = hasChoices ? textH + 120f + node.choices.Length * 128f : Mathf.Clamp(textH + 130f, 250f, 600f);
             float boxY = safe.yMax - boxH - 30f;
             Texture2D art = isNarr ? null : UIKit.Portrait(node.speaker);
             if (art != null)
@@ -188,11 +196,11 @@ namespace MidnightLegacy
 
             string shown = fullText.Substring(0, Mathf.Min(fullText.Length, Mathf.FloorToInt(typed)));
             Color tc = isNarr ? new Color(0.78f, 0.82f, 0.95f) : UIKit.Text;
-            UIKit.Label(new Rect(box.x + 40f, box.y + 40f, box.width - 80f, 230f), shown, 36, tc, TextAnchor.UpperLeft, false, true);
+            UIKit.Label(new Rect(box.x + 40f, box.y + 40f, box.width - 80f, textH + 12f), shown, 36, tc, TextAnchor.UpperLeft, false, true);
 
             if (hasChoices && done)
             {
-                float cy = box.y + 190f;
+                float cy = box.y + 40f + textH + 36f;
                 for (int i = 0; i < node.choices.Length; i++)
                 {
                     if (UIKit.Button(new Rect(box.x + 40f, cy, box.width - 80f, 108f), node.choices[i].text, BtnStyle.Secondary, true, 32))
@@ -252,6 +260,15 @@ namespace MidnightLegacy
         /// <summary>The painted harbour road behind scenes that take place on the road. Returns false when the art is not there.</summary>
         static bool DrawPaintedBackground(string bg)
         {
+            // a picture made for this scene (scene_room, scene_phone, scene_city, scene_road, scene_pass)
+            Texture2D own = UIKit.Art("scene_" + bg);
+            if (own != null)
+            {
+                float dr = 0.5f + 0.04f * Mathf.Sin(Time.unscaledTime * 0.12f);
+                UIKit.Cover(new Rect(0f, 0f, UIKit.W, UIKit.H), own, own.width / Mathf.Max(1f, (float)own.height), Color.white, 1.04f, dr, 0.5f);
+                UIKit.Vignette(0.45f, 0.55f);
+                return true;
+            }
             if (bg != "road" && bg != "pass") return false;
             Texture2D t = UIKit.Art("menu_bg");
             if (t == null) return false;
@@ -331,13 +348,23 @@ namespace MidnightLegacy
             switch (bg)
             {
                 case "room":
-                    Sky(new Color(0.07f, 0.08f, 0.16f), new Color(0.13f, 0.11f, 0.20f), H);
-                    UIKit.Round(new Rect(W * 0.12f, H * 0.10f, W * 0.76f, H * 0.38f), new Color(0.04f, 0.05f, 0.10f));
-                    Skyline(H * 0.44f, 3, new Color(0.08f, 0.09f, 0.18f), 0.28f);
-                    UIKit.Fill(new Rect(W * 0.12f + W * 0.38f - 4f, H * 0.10f, 8f, H * 0.38f), new Color(0.12f, 0.10f, 0.18f));
-                    UIKit.Fill(new Rect(0f, H * 0.52f, W, H * 0.48f), new Color(0.10f, 0.09f, 0.15f));
-                    UIKit.Round(new Rect(W * 0.06f, H * 0.50f, W * 0.5f, 90f), new Color(0.14f, 0.13f, 0.22f));
+                {
+                    // a night window that fills the top of the screen, a dark desk below with a warm lamp glow
+                    float wb = H * 0.50f;
+                    Sky(new Color(0.04f, 0.05f, 0.13f), new Color(0.16f, 0.12f, 0.26f), wb);
+                    StarField(0.6f);
+                    Skyline(wb, 3, new Color(0.06f, 0.07f, 0.15f), 0.34f);
+                    Skyline(wb, 21, new Color(0.04f, 0.05f, 0.11f), 0.22f);
+                    Color frame = new Color(0.05f, 0.045f, 0.08f);
+                    UIKit.Fill(new Rect(0f, 0f, 34f, wb), frame);
+                    UIKit.Fill(new Rect(W - 34f, 0f, 34f, wb), frame);
+                    UIKit.Fill(new Rect(W * 0.5f - 7f, 0f, 14f, wb), frame);
+                    UIKit.Fill(new Rect(0f, wb * 0.5f - 7f, W, 14f), frame);
+                    UIKit.Fill(new Rect(0f, wb - 8f, W, H - wb + 8f), new Color(0.07f, 0.065f, 0.11f));
+                    UIKit.Fade(new Rect(0f, wb - 8f, W, H * 0.22f), new Color(0.45f, 0.30f, 0.16f, 0.30f), true);
+                    UIKit.Fill(new Rect(0f, wb - 14f, W, 14f), new Color(0.13f, 0.11f, 0.17f));
                     break;
+                }
                 case "garage":
                     Sky(new Color(0.12f, 0.11f, 0.14f), new Color(0.22f, 0.19f, 0.20f), H);
                     UIKit.Fill(new Rect(0f, H * 0.55f, W, H * 0.45f), new Color(0.13f, 0.13f, 0.15f));

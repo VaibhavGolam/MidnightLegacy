@@ -48,6 +48,7 @@ namespace MidnightLegacy
 
     /// <summary>The run was restarted.</summary>
     public struct RunReset { }
+    public struct CheckpointReached { public int index; public float s; }
 
     /// <summary>The player car touched a traffic vehicle. impactSpeed is the closing speed in m/s.</summary>
     public struct TrafficHit

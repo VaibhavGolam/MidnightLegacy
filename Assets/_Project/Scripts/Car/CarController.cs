@@ -55,8 +55,14 @@ namespace MidnightLegacy
         public float HandbrakeAmount { get; private set; }
         public float WheelSpinRad { get; private set; }
         public float WallHitTimer { get; private set; }
+        /// <summary>True while the car is backing up (REVERSE held and the car has stopped).</summary>
+        public bool Reversing { get; private set; }
+        /// <summary>Furthest point of the road reached this run. Reversing is limited to a short way back from here.</summary>
+        public float MaxS { get; private set; }
 
         public const float WheelRadius = 0.31f;
+        const float ReverseSpeed = 6.5f;       // m/s, about 23 km/h
+        const float ReverseLimit = 45f;        // metres back from MaxS
         /// <summary>Half length and half width of the car body, used for collisions.</summary>
         public const float HalfLength = 2.05f;
         public const float HalfWidth = 0.85f;
@@ -104,6 +110,8 @@ namespace MidnightLegacy
             WallHitTimer = 0f;
             NitroCharge = startNitro;
             NitroActive = false;
+            Reversing = false;
+            MaxS = S;
             ApplyTransform();
         }
 
@@ -134,7 +142,7 @@ namespace MidnightLegacy
             Vx += dVx;
             Vy = Mathf.Clamp(Vy + dVy, -14f, 14f);
             Omega += Mathf.Clamp(contactFwd * dVy * 0.3f, -4f, 4f);
-            if (Vx < 3f) Vx = 3f;
+            if (!Reversing && Vx < 3f) Vx = 3f;
             if (profile != null) damageAmount *= profile.damageTaken;
             Damage01 = Mathf.Clamp01(Damage01 + damageAmount);
             WallHitTimer = 0.3f;
@@ -227,7 +235,15 @@ namespace MidnightLegacy
             float lift = Mathf.Clamp01((steerNorm - p.liftStartSteer) / Mathf.Max(0.01f, 1f - p.liftStartSteer))
                          * p.throttleLiftOnSteer
                          * Mathf.Clamp01((speedMS * 3.6f - p.liftMinSpeedKph) / 40f);
-            bool brakeIn = input != null && input.Brake;
+            // REVERSE: brakes first, then backs up once the car has nearly stopped. Not during a rolling start or the countdown.
+            bool revIn = input != null && input.Reverse && SpeedCapKph <= 0f;
+            if (Reversing || (revIn && Vx < 2.5f))
+            {
+                ReverseStep(dt, revIn);
+                return;
+            }
+
+            bool brakeIn = (input != null && input.Brake) || revIn;
             bool handIn = input != null && input.Handbrake;
             bool nitroIn = input != null && input.Nitro && NitroCharge > 0.005f && Vx > 5f && !brakeIn;
             NitroActive = nitroIn;
@@ -311,8 +327,51 @@ namespace MidnightLegacy
             Vx += ax * dt;
             Vy += ay * dt;
             Omega += torque / Iz * dt;
-            if (Vx < 3f) Vx = 3f;   // creep floor: no stopping, no reversing
+            if (Vx < 3f) Vx = 3f;   // creep floor: the car never stops by itself (REVERSE is the only way back)
             LateralAccel = Mathf.Lerp(LateralAccel, fyBody / m, Mathf.Min(1f, 10f * dt));
+
+            IntegrateRoad(dt);
+        }
+
+        /// <summary>
+        /// Low speed driving: used while reversing and for the short moment after REVERSE is released, until the car is
+        /// back up to the creep speed. A plain kinematic model (no tyre slip): the car turns about its rear axle.
+        /// </summary>
+        void ReverseStep(float dt, bool revIn)
+        {
+            CarHandlingProfile p = profile;
+            Reversing = true;
+
+            float target = revIn ? -ReverseSpeed : 3.2f;
+            // do not back up forever: stay within a short way of the furthest point reached
+            if (revIn && S < MaxS - ReverseLimit) target = 0f;
+            float accel = revIn ? 7f : 10f;
+            Vx = Mathf.MoveTowards(Vx, target, accel * dt);
+            Vy = Mathf.MoveTowards(Vy, 0f, 14f * dt);
+            Omega = Vx * Mathf.Tan(SteerAngle) / Mathf.Max(1.5f, p.wheelbase);
+
+            BrakeAmount = Mathf.MoveTowards(BrakeAmount, 0f, dt * 6f);
+            HandbrakeAmount = 0f;
+            Throttle = 0f;
+            NitroActive = false;
+            NitroCharge = Mathf.Min(1f, NitroCharge + p.nitroRegenPerSecond * dt);
+            SlideAmount = Mathf.MoveTowards(SlideAmount, 0f, dt * 6f);
+            LongAccel = Mathf.Lerp(LongAccel, 0f, Mathf.Min(1f, 8f * dt));
+            LateralAccel = Mathf.Lerp(LateralAccel, 0f, Mathf.Min(1f, 8f * dt));
+            FrontSlipDeg = 0f;
+            RearSlipDeg = 0f;
+            IsOffRoad = Mathf.Abs(D) > road.Recipe.roadHalfWidth;
+
+            IntegrateRoad(dt);
+
+            // back to normal driving once the car is rolling forward again
+            if (!revIn && Vx >= 3f) Reversing = false;
+        }
+
+        /// <summary>Moves the car along the road from its car-space velocity and keeps it inside the guard rails.</summary>
+        void IntegrateRoad(float dt)
+        {
+            CarHandlingProfile p = profile;
 
             // ---- convert to road space ----
             float cps = Mathf.Cos(Psi), sps = Mathf.Sin(Psi);
@@ -322,6 +381,7 @@ namespace MidnightLegacy
             float denom = Mathf.Max(0.2f, 1f - kappa * D);
             float sDot = vT / denom;
             S += sDot * dt;
+            if (S > MaxS) MaxS = S;
             D += vN * dt;
             Psi += (Omega - kappa * sDot) * dt;
             if (Psi > Mathf.PI) Psi -= 2f * Mathf.PI;

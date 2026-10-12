@@ -27,6 +27,8 @@ namespace MidnightLegacy
         public static readonly Color Text = new Color(0.94f, 0.95f, 0.99f);
         public static readonly Color Dim = new Color(0.62f, 0.65f, 0.80f);
         public static readonly Color Shade = new Color(0f, 0f, 0f, 0.55f);
+        /// <summary>The electric blue of panel edges and glows.</summary>
+        public static readonly Color EdgeBlue = new Color(0.28f, 0.45f, 1f);
 
         public static float W { get; private set; }
         public static float H { get; private set; }
@@ -34,7 +36,11 @@ namespace MidnightLegacy
         /// <summary>Safe area in UI units (notches, rounded corners, gesture bar).</summary>
         public static Rect Safe { get; private set; }
 
-        static Texture2D white, roundTex, logoTex, circleTex, gradTex, ringTex;
+        static Texture2D white, roundTex, logoTex, circleTex, gradTex, gradHTex, ringTex;
+        static Font headFont, bodyFont;
+        static bool fontsLoaded;
+        // Rajdhani has a small x-height, so body text is drawn a little larger to look the same size as the old font
+        const float BodyScale = 1.14f;
         static GUIStyle boxStyle, ringStyle;
         static readonly Dictionary<int, GUIStyle> labelStyles = new Dictionary<int, GUIStyle>();
         static GUIStyle fieldStyle;
@@ -184,6 +190,30 @@ namespace MidnightLegacy
                 ringTex.Apply();
                 ringTex.hideFlags = HideFlags.HideAndDontSave;
             }
+            if (gradHTex == null)
+            {
+                // a horizontal ramp: opaque on the left, clear on the right
+                const int n = 64;
+                gradHTex = new Texture2D(n, 1, TextureFormat.RGBA32, false);
+                gradHTex.filterMode = FilterMode.Bilinear;
+                gradHTex.wrapMode = TextureWrapMode.Clamp;
+                Color[] px = new Color[n];
+                for (int x = 0; x < n; x++)
+                {
+                    float t = 1f - x / (float)(n - 1);
+                    px[x] = new Color(1f, 1f, 1f, t * t * (3f - 2f * t));
+                }
+                gradHTex.SetPixels(px);
+                gradHTex.Apply();
+                gradHTex.hideFlags = HideFlags.HideAndDontSave;
+            }
+            if (!fontsLoaded)
+            {
+                // racing look: bold italic for titles and numbers, a clean condensed face for text. Falls back to the default font.
+                fontsLoaded = true;
+                headFont = Resources.Load<Font>("Fonts/ChakraPetch-BoldItalic");
+                bodyFont = Resources.Load<Font>("Fonts/Rajdhani-SemiBold");
+            }
             if (boxStyle == null)
             {
                 boxStyle = new GUIStyle();
@@ -274,15 +304,19 @@ namespace MidnightLegacy
 
         public static void Card(Rect r)
         {
+            if (Skin(r, "ui_panel", 44f, 0.2f, Color.white)) return;
             Round(r, Panel);
-            Outline(r, new Color(0.55f, 0.6f, 1f, 0.16f));
+            Glow(r, EdgeBlue, 0.12f);
+            Outline(r, new Color(EdgeBlue.r, EdgeBlue.g, EdgeBlue.b, 0.55f));
         }
 
         /// <summary>A smaller card (list rows, stat tiles): fill plus the same thin outline as Card.</summary>
         public static void Tile(Rect r, Color fill)
         {
+            // the painted panel is dark and neutral: only use it for dark fills, coloured tiles keep their colour
+            if (Mathf.Max(fill.r, Mathf.Max(fill.g, fill.b)) < 0.30f && Skin(r, "ui_panel", 34f, 0.2f, new Color(1f, 1f, 1f, Mathf.Clamp01(fill.a * 1.2f)))) return;
             Round(r, fill);
-            Outline(r, new Color(0.55f, 0.6f, 1f, fill.a < 0.5f ? 0.08f : 0.13f));
+            Outline(r, new Color(EdgeBlue.r, EdgeBlue.g, EdgeBlue.b, fill.a < 0.5f ? 0.20f : 0.38f));
         }
 
         /// <summary>A soft gradient: the colour c (with its own alpha) at the top edge fading to clear at the bottom, or the other way round.</summary>
@@ -302,6 +336,157 @@ namespace MidnightLegacy
             Fade(t, new Color(0f, 0f, 0.02f, top), true);
             Rect b = new Rect(0f, H * 0.42f, W, H * 0.58f);
             Fade(b, new Color(0f, 0f, 0.02f, bottom), false);
+        }
+
+        /// <summary>
+        /// Draws a painted panel or button from Resources/Art in nine pieces, so the corners keep their shape at any size.
+        /// corner = size of the corners on screen (UI units). srcFrac = how much of the picture's height the corner takes
+        /// (0.2 = a fifth). Returns false, and draws nothing, when the picture is not in the project.
+        /// </summary>
+        public static bool Skin(Rect r, string name, float corner, float srcFrac, Color tint)
+        {
+            Texture2D t = ArtLoader.Tex(name);
+            if (t == null) return false;
+            if (Event.current.type != EventType.Repaint) return true;
+            float c = Mathf.Min(corner, r.width * 0.5f, r.height * 0.5f);
+            float vy = Mathf.Clamp(srcFrac, 0.02f, 0.49f);
+            float vx = Mathf.Clamp(srcFrac * t.height / Mathf.Max(1f, t.width), 0.02f, 0.49f);
+            float[] dx = { r.x, r.x + c, r.xMax - c, r.xMax };
+            float[] dy = { r.y, r.y + c, r.yMax - c, r.yMax };                 // top to bottom
+            float[] ux = { 0f, vx, 1f - vx, 1f };
+            float[] uy = { 1f, 1f - vy, vy, 0f };                              // texture rows run bottom to top
+            GUI.color = tint;
+            for (int j = 0; j < 3; j++)
+                for (int i = 0; i < 3; i++)
+                {
+                    Rect d = new Rect(dx[i], dy[j], dx[i + 1] - dx[i], dy[j + 1] - dy[j]);
+                    if (d.width <= 0f || d.height <= 0f) continue;
+                    Rect u = new Rect(ux[i], uy[j + 1], ux[i + 1] - ux[i], uy[j] - uy[j + 1]);
+                    GUI.DrawTextureWithTexCoords(d, t, u);
+                }
+            GUI.color = Color.white;
+            return true;
+        }
+
+        /// <summary>A painted icon (Resources/Art) drawn inside r, keeping its shape. Returns false when the picture is missing.</summary>
+        public static bool Icon(Rect r, string name, Color tint, bool flipX = false)
+        {
+            Texture2D t = ArtLoader.Tex(name);
+            if (t == null) return false;
+            if (Event.current.type != EventType.Repaint) return true;
+            float a = t.width / Mathf.Max(1f, (float)t.height);
+            Rect d = r;
+            if (a > r.width / r.height) { d.height = r.width / a; d.y = r.y + (r.height - d.height) * 0.5f; }
+            else { d.width = r.height * a; d.x = r.x + (r.width - d.width) * 0.5f; }
+            GUI.color = tint;
+            GUI.DrawTextureWithTexCoords(d, t, flipX ? new Rect(1f, 0f, -1f, 1f) : new Rect(0f, 0f, 1f, 1f));
+            GUI.color = Color.white;
+            return true;
+        }
+
+        /// <summary>A disc filled from the bottom up (0..1): used for the nitro tank inside its button.</summary>
+        public static void DiscFill(Rect r, Color c, float fill01)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            float f = Mathf.Clamp01(fill01);
+            if (f <= 0.002f) return;
+            GUI.color = c;
+            Rect d = new Rect(r.x, r.yMax - r.height * f, r.width, r.height * f);
+            GUI.DrawTextureWithTexCoords(d, circleTex, new Rect(0f, 0f, 1f, f));
+            GUI.color = Color.white;
+        }
+
+        /// <summary>A soft outer glow round a rounded box: a few outlines growing outward and fading.</summary>
+        public static void Glow(Rect r, Color c, float strength)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            for (int i = 1; i <= 4; i++)
+            {
+                float g = i * 3f;
+                Outline(new Rect(r.x - g, r.y - g, r.width + 2f * g, r.height + 2f * g), new Color(c.r, c.g, c.b, strength * (1f - i / 5f)));
+            }
+        }
+
+        /// <summary>Same as Fade but sideways: the colour is solid on the left edge and clear on the right (or the other way round).</summary>
+        public static void FadeH(Rect r, Color c, bool opaqueAtLeft)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            GUI.color = c;
+            if (opaqueAtLeft) GUI.DrawTexture(r, gradHTex);
+            else GUI.DrawTextureWithTexCoords(r, gradHTex, new Rect(1f, 0f, -1f, 1f));
+            GUI.color = Color.white;
+        }
+
+        /// <summary>A bar made of separate blocks (rating bars, condition). The filled blocks may be partly filled.</summary>
+        public static void SegBar(Rect r, float v01, int segments, Color fill, Color back)
+        {
+            float gap = Mathf.Max(3f, r.height * 0.22f);
+            float sw = (r.width - gap * (segments - 1)) / segments;
+            float v = Mathf.Clamp01(v01) * segments;
+            for (int i = 0; i < segments; i++)
+            {
+                Rect sr = new Rect(r.x + i * (sw + gap), r.y, sw, r.height);
+                Round(sr, back);
+                float f = Mathf.Clamp01(v - i);
+                if (f > 0.02f) Round(new Rect(sr.x, sr.y, Mathf.Max(r.height * 0.5f, sw * f), sr.height), fill);
+            }
+        }
+
+        /// <summary>A straight bar of any length and angle (degrees, clockwise), centred on c. The building block of the drawn icons.</summary>
+        public static void Stroke(Vector2 c, float length, float thickness, float angle, Color col)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            Matrix4x4 saved = GUI.matrix;
+            GUIUtility.RotateAroundPivot(angle, c);
+            Round(new Rect(c.x - length * 0.5f, c.y - thickness * 0.5f, length, thickness), col);
+            GUI.matrix = saved;
+        }
+
+        /// <summary>A section title in spaced capitals with a thin line running to the right and three slashes at the end.</summary>
+        public static void SectionHeader(Rect r, string text, Color c)
+        {
+            string spaced = Spaced(text);
+            Label(new Rect(r.x, r.y, r.width, r.height), spaced, Mathf.RoundToInt(r.height * 0.62f), c, TextAnchor.MiddleLeft, true);
+            float tw = TextWidth(spaced, Mathf.RoundToInt(r.height * 0.62f), true);
+            float lx = r.x + tw + 24f, lw = r.xMax - lx - 70f;
+            if (lw > 20f) Fill(new Rect(lx, r.center.y - 1f, lw, 2f), new Color(c.r, c.g, c.b, 0.55f));
+            Slashes(new Rect(r.xMax - 60f, r.y + r.height * 0.18f, 60f, r.height * 0.64f), c);
+        }
+
+        /// <summary>Three leaning bars, the racing stripe motif.</summary>
+        public static void Slashes(Rect r, Color c)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            for (int i = 0; i < 3; i++)
+                Stroke(new Vector2(r.x + 12f + i * 18f, r.center.y), r.height, 7f, 22f, new Color(c.r, c.g, c.b, 0.9f - i * 0.22f));
+        }
+
+        static string Spaced(string t)
+        {
+            if (string.IsNullOrEmpty(t) || t.Length > 24) return t;
+            System.Text.StringBuilder sb = new System.Text.StringBuilder(t.Length * 2);
+            for (int i = 0; i < t.Length; i++)
+            {
+                sb.Append(t[i]);
+                if (i < t.Length - 1 && t[i] != ' ' && t[i + 1] != ' ') sb.Append(' ');
+            }
+            return sb.ToString();
+        }
+
+        public static float TextWidth(string text, int size, bool bold = false)
+        {
+            GUIStyle s = LabelStyle(size, bold, TextAnchor.UpperLeft, false);
+            return s.CalcSize(new GUIContent(text)).x;
+        }
+
+        /// <summary>A small gold coin with a dollar sign.</summary>
+        public static void Coin(Rect r)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            if (Icon(r, "ui_coin", Color.white)) return;
+            Circle(r, new Color(1f, 0.82f, 0.34f));
+            Circle(new Rect(r.x + r.width * 0.09f, r.y + r.height * 0.09f, r.width * 0.82f, r.height * 0.82f), new Color(0.96f, 0.66f, 0.14f));
+            Label(r, "$", Mathf.RoundToInt(r.height * 0.58f), new Color(0.35f, 0.22f, 0.02f), TextAnchor.MiddleCenter, true);
         }
 
         /// <summary>Painted art by file name (Resources/Art), or null when the file is not in the project.</summary>
@@ -360,8 +545,18 @@ namespace MidnightLegacy
             if (!labelStyles.TryGetValue(key, out s))
             {
                 s = new GUIStyle();
-                s.fontSize = size;
-                s.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
+                Font f = bold ? headFont : bodyFont;
+                if (f != null)
+                {
+                    s.font = f;
+                    s.fontSize = bold ? size : Mathf.RoundToInt(size * BodyScale);
+                    s.fontStyle = FontStyle.Normal;       // the weight and slant are in the font files
+                }
+                else
+                {
+                    s.fontSize = size;
+                    s.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
+                }
                 s.alignment = anchor;
                 s.wordWrap = wrap;
                 s.clipping = TextClipping.Overflow;
@@ -440,7 +635,7 @@ namespace MidnightLegacy
                 case BtnStyle.Danger: bg = new Color(0.62f, 0.2f, 0.22f); break;
                 case BtnStyle.Secondary: bg = PanelLight; break;
                 case BtnStyle.Ghost: bg = new Color(1f, 1f, 1f, 0.08f); break;
-                default: bg = Accent; break;
+                default: bg = new Color(0.20f, 0.40f, 0.96f); break;
             }
             if (!enabled) { bg = new Color(bg.r * 0.45f, bg.g * 0.45f, bg.b * 0.5f, bg.a); fg = new Color(fg.r, fg.g, fg.b, 0.45f); }
 
@@ -448,9 +643,29 @@ namespace MidnightLegacy
             // the id used by Click is idCounter now, so pressed state can be checked right after
             bool pressed = enabled && pressId == idCounter && PointerDown && dragTotal < 14f;
             Rect d = pressed ? new Rect(r.x + 2f, r.y + 3f, r.width - 4f, r.height - 4f) : r;
-            Round(new Rect(d.x, d.y + 3f, d.width, d.height), new Color(0f, 0f, 0f, 0.35f));
-            Round(d, pressed ? Color.Lerp(bg, Color.black, 0.2f) : bg);
-            if (d.height >= 88f && style != BtnStyle.Ghost)
+            string skin = null;
+            switch (style)
+            {
+                case BtnStyle.Gold: skin = "ui_button_gold"; break;
+                case BtnStyle.Danger: skin = "ui_button_danger"; break;
+                case BtnStyle.Secondary: skin = "ui_button_secondary"; break;
+                case BtnStyle.Primary: skin = "ui_button_primary"; break;
+            }
+            bool painted = false;
+            if (skin != null && ArtLoader.Has(skin))
+            {
+                Color tint = !enabled ? new Color(0.5f, 0.5f, 0.55f, 0.8f) : (pressed ? new Color(0.78f, 0.78f, 0.82f, 1f) : Color.white);
+                Round(new Rect(d.x, d.y + 4f, d.width, d.height), new Color(0f, 0f, 0f, 0.30f));
+                painted = Skin(d, skin, Mathf.Min(46f, d.height * 0.42f), 0.3f, tint);
+            }
+            if (!painted)
+            {
+                Round(new Rect(d.x, d.y + 3f, d.width, d.height), new Color(0f, 0f, 0f, 0.35f));
+                if (style == BtnStyle.Primary && enabled && !pressed) Glow(d, EdgeBlue, 0.22f);
+                Round(d, pressed ? Color.Lerp(bg, Color.black, 0.2f) : bg);
+                if (style == BtnStyle.Primary && enabled) Outline(d, new Color(0.8f, 0.88f, 1f, pressed ? 0.35f : 0.75f));
+            }
+            if (!painted && d.height >= 88f && style != BtnStyle.Ghost)
             {
                 // a soft highlight on the top half and a thin edge give the flat button some body
                 Round(new Rect(d.x + 3f, d.y + 3f, d.width - 6f, d.height * 0.5f), new Color(1f, 1f, 1f, pressed ? 0.04f : 0.10f));

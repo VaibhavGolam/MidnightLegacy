@@ -4,7 +4,7 @@ namespace MidnightLegacy
 {
     /// <summary>
     /// Top-down camera for the driving view. It looks straight down at the road with an orthographic lens, rotated so
-    /// the direction of travel is always "up" on the screen. The car sits in the lower part of the screen and the
+    /// the direction of travel is always "up" on the screen. The car sits just below the middle of the screen, above the touch controls and the
     /// view zooms out as speed rises, so there is more road to read at 150 km/h.
     /// The heading is smoothed and blended with the road direction so a slide shows up as the car turning inside
     /// the frame instead of the whole world whipping around.
@@ -13,18 +13,18 @@ namespace MidnightLegacy
     public sealed class ChaseCamera : MonoBehaviour
     {
         [Tooltip("Visible road length (metres from the bottom to the top of the screen) when slow.")]
-        public float viewHeightSlow = 30f;
+        public float viewHeightSlow = 22f;
         [Tooltip("Visible road length at full speed.")]
-        public float viewHeightFast = 46f;
+        public float viewHeightFast = 34f;
         [Tooltip("The view is never narrower than this many metres (tall phones).")]
-        public float minViewWidth = 15f;
+        public float minViewWidth = 11f;
         [Tooltip("Where the car sits, measured from the bottom of the screen (0.25 = a quarter up).")]
-        [Range(0.1f, 0.5f)] public float carScreenHeight = 0.27f;
+        [Range(0.1f, 0.6f)] public float carScreenHeight = 0.46f;
         [Tooltip("0 = camera follows the road direction, 1 = camera follows the car's heading.")]
         [Range(0f, 1f)] public float followCarHeading = 0.35f;
         public float yawSmoothing = 4.5f;
         public float zoomSmoothing = 2.5f;
-        public float nitroZoom = 4f;
+        public float nitroZoom = 3f;
         /// <summary>0 turns shake off (Settings > Reduce camera motion).</summary>
         public float shakeScale = 1f;
 

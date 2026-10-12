@@ -637,6 +637,16 @@ namespace MidnightLegacy
             });
         }
 
+        /// <summary>Failed run: carry on from the last checkpoint instead of the start. Free.</summary>
+        public void ResultsCheckpoint()
+        {
+            if (Session == null || Session.Race == null) return;
+            PendingResult = null;
+            committed = false;
+            Session.RestartFromCheckpoint();
+            Go(Scr.Drive);
+        }
+
         // ------------------------------------------------------------------ ads and purchases
 
         public void RewardedAd(AdPlacement placement, Action<bool> done)

@@ -79,6 +79,7 @@ For GitHub builds without Unity on your PC, read `GITHUB_BUILD.md`. This folder 
 Assets/_Project/
   Resources/Shaders/MLStylized.shader        night look: vertex colours, headlight cone, fog
   Resources/Shaders/MLSprite.shader          textured sprites (painted cars, traffic, props, garage)
+  Resources/Fonts/                           Chakra Petch + Rajdhani (SIL OFL, licence files included)
   Resources/Art/                             the painted art (PNG/JPG), loaded by name
   Art_Source/                                originals that are not loaded at run time (app icon, prop sources)
   Resources/MLContent/races.json             optional event overrides
@@ -96,7 +97,7 @@ Assets/_Project/
     Save/        SaveData, SaveSystem (JSON with backup)
     Settings/    GraphicsSettings, AdaptiveQuality
     Monetization/ Monetization (ad + IAP interfaces, stubs, ad policy)
-    UI/          UIKit, TuningPanel (dev only)
+    UI/          UIKit (drawing toolkit), UIIcons (drawn icons), TuningPanel (dev only)
     UI/Screens/  Splash, Consent, Menu, Hub (+ GarageTab, ShopTab), Dialogue, DriveHUD, Results, SettingsPanel
     Editor/      BuildSetup, ArtImporter (import settings for the art, app icon)
 ```
@@ -121,3 +122,32 @@ Notes:
 - Spoilers and the wheel styles do not show on the painted top-down cars (the art already has its own). Decals do.
 - `ArtLoader.Enabled = false` turns all painted art off, which is handy for checking performance.
 - `store_feature` (the Play Store banner) is not in the project on purpose. Upload it in the Play Console.
+
+## 9. Controls, reverse and checkpoints
+
+Layout (portrait): two steering pads along the bottom edge, and round buttons just above them. BRAKE and REV on the left, DRIFT and NITRO on the right. The middle of the screen is clear and the car sits just below the middle, so nothing covers it. Keyboard in the editor: A/D steer, S brake, Space drift, Shift or W nitro, **R reverse**.
+
+- **Reverse**: hold REV. The car brakes first, then backs up at about 23 km/h (steer to turn it round). Release and it rolls forward again. It only lets you back up about 45 m from the furthest point you reached. It is off during the countdown. Changed in `CarController` (`ReverseStep`), button in `InputReader`.
+- **Checkpoints**: sprint, time trial, traffic run and escape events get gantries every `checkpointEvery` metres (default 450, set per race in `races.json`). Passing one saves the clock, damage, crash count and the rival's position. You can then use **FROM LAST CHECKPOINT** in the pause menu, or **CONTINUE FROM CHECKPOINT** on the failed screen. It is free. A run continued from a checkpoint can still win and pay out, but it gets no gold medal, no Perfect bonus and no best time. Logic is in `RaceManager.RestartFromCheckpoint`.
+- **Road size**: the camera is closer. Tune it live in Dev Tuning (`cam.viewHeightSlow`, `cam.viewHeightFast`, `cam.carScreenHeight`) or change the defaults in `ChaseCamera`.
+
+New painted UI pieces (all optional, see `UI_ART_PROMPTS.md`): `ui_panel`, `ui_button_primary/secondary/gold/danger`, `ui_pad`, `ui_btn_round`, `ui_icon_brake/nitro/drift/reverse/arrow/pause`, `ui_medal`, and the story scenes `scene_room/phone/city/road/pass`.
+
+## 10. Menu restyle, fonts and art hooks
+
+The hub (Story, Events, Garage, Mail, Shop, More) was restyled to the mockups: navy glass cards with an electric blue edge, icon tab bar, coin chip with a "+" that opens the Shop, thumbnails on event cards, portraits in Mail, segmented stat bars in the Garage.
+
+Fonts: headings use Chakra Petch Bold Italic, body text uses Rajdhani SemiBold, both loaded from `Resources/Fonts`. Both are SIL Open Font Licence; keep the two `-OFL.txt` files in the project. If the fonts are missing the game falls back to Unity's default font.
+
+Everything painted is optional. Without a file the game draws a plain version. Drop files into `Resources/Art/` and run **Midnight Legacy > Reimport Art**. Prompts for all of them are in `UI_ART_PROMPTS.md`.
+
+| Where | File names |
+|---|---|
+| Tab bar | `ui_tab_story`, `ui_tab_events`, `ui_tab_garage`, `ui_tab_mail`, `ui_tab_shop`, `ui_tab_more` |
+| Career tiles | `ui_stat_races`, `ui_stat_wins`, `ui_stat_distance`, `ui_stat_speed`, `ui_stat_near`, `ui_stat_corners`, `ui_stat_drift`, `ui_stat_cash` |
+| Small icons | `ui_coin`, `ui_check`, `ui_lock`, `ui_gear`, `ui_notebook` |
+| Event and story cards | `thumb_forest`, `thumb_pass`, `thumb_coast`, `thumb_city` |
+| Shop | `shop_removeads`, `shop_supporter`, `shop_paint`, `shop_wheels`, `shop_decals` |
+| Garage parts | `part_engine`, `part_tires`, `part_suspension`, `part_brakes`, `part_lightweight`, `part_aero`, `part_nitro`, `part_frame` |
+
+Mail portraits use the existing `char_*` files (sato, mia, rook, dex, ivy, rina, ghost, jun).

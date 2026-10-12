@@ -29,6 +29,12 @@ namespace MidnightLegacy
         public float CountdownValue { get; private set; }
         public bool HasFinishLine { get { return FinishS > 0f; } }
         public bool HasTimer { get { return Def.timeLimit > 0f; } }
+        /// <summary>True once a checkpoint has been passed and this kind of event allows continuing from it.</summary>
+        public bool HasCheckpoint { get { return cpValid; } }
+        /// <summary>True when the run was continued from a checkpoint at least once.</summary>
+        public bool UsedCheckpoint { get; private set; }
+        /// <summary>Metres between checkpoints, 0 when this event has none.</summary>
+        public float CheckpointSpacing { get { return cpEvery; } }
 
         /// <summary>Distance in metres between player and rival, positive when the player is ahead.</summary>
         public float GapToRival
@@ -72,6 +78,13 @@ namespace MidnightLegacy
         RivalController cameo;
         readonly List<TrackMarker> markers = new List<TrackMarker>();
 
+        // checkpoint snapshot
+        float cpEvery;
+        bool cpValid;
+        bool resuming;            // the countdown in progress is for a restart from a checkpoint: keep the clock and stats
+        float cpS, cpElapsed, cpTimeLeft, cpDamage, cpRivalS, cpRivalD;
+        readonly RunStats cpStats = new RunStats();
+
         public void Init(CarController playerCar, RoadModel roadModel, TrafficSystem trafficSystem, StyleTracker tracker,
                          TrackGenerator trackGen, InputReader inputReader, RaceDef def, SaveData saveData,
                          RivalDef rival, RivalDef unknown, float skillOffset)
@@ -100,6 +113,9 @@ namespace MidnightLegacy
             closestChaser = 999f;
             finishTimer = 0f;
             Checkpoints = 0;
+            cpValid = false;
+            resuming = false;
+            UsedCheckpoint = false;
             Elapsed = 0f;
             Banner = "";
             BannerTime = 0f;
@@ -115,7 +131,11 @@ namespace MidnightLegacy
             car.SpeedCapKph = car.profile.startSpeedKph;
             StartS = startS;
             FinishS = Def.length > 0f ? startS + Def.length : 0f;
-            nextCheckpointS = startS + Def.checkpointEvery;
+            // checkpoints: every event with a finish line except the tutorial and the chase
+            bool cpKind = Def.kind == RaceKind.Sprint || Def.kind == RaceKind.TimeTrial
+                          || Def.kind == RaceKind.TrafficRun || Def.kind == RaceKind.Escape;
+            cpEvery = (cpKind && Def.checkpointEvery > 0f && (FinishS > 0f || Def.kind == RaceKind.TimeTrial)) ? Def.checkpointEvery : 0f;
+            nextCheckpointS = cpEvery > 0f ? startS + cpEvery : float.MaxValue;
 
             if (Rival != null) Destroy(Rival.gameObject);
             Rival = null;
@@ -137,8 +157,8 @@ namespace MidnightLegacy
 
             // ---- gantries ----
             markers.Clear();
-            if (Def.kind == RaceKind.TimeTrial && Def.checkpointEvery > 0f)
-                for (float s = startS + Def.checkpointEvery; FinishS <= 0f || s < FinishS - 60f; s += Def.checkpointEvery)
+            if (cpEvery > 0f)
+                for (float s = startS + cpEvery; FinishS <= 0f || s < FinishS - 60f; s += cpEvery)
                 {
                     markers.Add(new TrackMarker { s = s, kind = 0 });
                     if (markers.Count > 40) break;
@@ -224,8 +244,12 @@ namespace MidnightLegacy
         {
             State = RaceState.Racing;
             car.SpeedCapKph = 0f;
-            Elapsed = 0f;
-            style.ResetRun();
+            if (!resuming)
+            {
+                Elapsed = 0f;
+                style.ResetRun();
+            }
+            resuming = false;
             style.Active = true;
             if (Rival != null) Rival.Release();
             PushBanner("GO!", 1.0f);
@@ -245,8 +269,83 @@ namespace MidnightLegacy
             cameo.CollisionEnabled = false;
         }
 
+        void ReachCheckpoint()
+        {
+            Checkpoints++;
+            nextCheckpointS += cpEvery;
+            if (Def.kind == RaceKind.TimeTrial)
+            {
+                TimeLeft += Def.checkpointBonus;
+                PushBanner("CHECKPOINT  +" + Mathf.RoundToInt(Def.checkpointBonus) + "s", 1.6f);
+                car.AddNitro(0.15f);
+            }
+            else PushBanner("CHECKPOINT", 1.6f);
+
+            cpValid = true;
+            cpS = car.S;
+            cpElapsed = Elapsed;
+            cpTimeLeft = TimeLeft;
+            cpDamage = car.Damage01;
+            cpStats.CopyFrom(style.Stats);
+            if (Rival != null) { cpRivalS = Rival.S; cpRivalD = Rival.D; }
+            EventBus.Raise(new CheckpointReached { index = Checkpoints, s = cpS });
+        }
+
+        /// <summary>
+        /// Puts the player back on the road at the last checkpoint, with the clock, damage, crash count and the rival
+        /// as they were there. Free, but the run no longer counts for a gold medal or a best time.
+        /// </summary>
+        public void RestartFromCheckpoint()
+        {
+            if (!cpValid) { Restart(); return; }
+            UsedCheckpoint = true;
+            resuming = true;
+            Result = null;
+            ReadyForResults = false;
+            finishTimer = 0f;
+            rivalFinished = false;
+            closestChaser = 999f;
+            Banner = "";
+            BannerTime = 0f;
+            Time.timeScale = 1f;
+
+            car.PlaceAt(cpS, 0f);
+            car.startS = StartS;                       // PlaceAt moves it, the run still started at the grid
+            car.Damage01 = cpDamage;
+            car.SpeedCapKph = car.profile.startSpeedKph;
+
+            if (traffic != null)
+            {
+                traffic.Enabled = Def.traffic > 0 || Def.kind == RaceKind.Endless;
+                traffic.ResetRun();
+            }
+            style.ResetRun();
+            style.Stats.CopyFrom(cpStats);
+            style.Active = false;
+
+            Elapsed = cpElapsed;
+            TimeLeft = cpTimeLeft;
+
+            if (Rival != null)
+            {
+                float rs = cpRivalS;
+                if (Def.kind == RaceKind.Escape) rs = Mathf.Min(rs, cpS - 28f);   // a little breathing room after the restart
+                Rival.ResetTo(rs, cpRivalD);
+                Rival.GripScale = car.SurfaceGrip;
+            }
+            if (cameo != null) cameo.gameObject.SetActive(false);
+
+            State = RaceState.Countdown;
+            countdownT = 2.6f;
+            lastCount = 99;
+            EventBus.Raise(new RaceStateChanged { state = State });
+            EventBus.Raise(new RunReset());
+        }
+
         void CheckEnd()
         {
+            if (cpEvery > 0f && car.S >= nextCheckpointS && (FinishS <= 0f || nextCheckpointS < FinishS - 60f)) ReachCheckpoint();
+
             float done = car.S - StartS;
             switch (Def.kind)
             {
@@ -261,14 +360,6 @@ namespace MidnightLegacy
                     break;
 
                 case RaceKind.TimeTrial:
-                    if (Def.checkpointEvery > 0f && car.S >= nextCheckpointS && (FinishS <= 0f || nextCheckpointS < FinishS - 60f))
-                    {
-                        Checkpoints++;
-                        nextCheckpointS += Def.checkpointEvery;
-                        TimeLeft += Def.checkpointBonus;
-                        PushBanner("CHECKPOINT  +" + Mathf.RoundToInt(Def.checkpointBonus) + "s", 1.6f);
-                        car.AddNitro(0.15f);
-                    }
                     if (FinishS > 0f && car.S >= FinishS) End(true, null);
                     else if (TimeLeft <= 0f) End(false, "Out of time");
                     break;
@@ -339,6 +430,8 @@ namespace MidnightLegacy
             r.distance = Stats.distance;
             r.score = Def.kind == RaceKind.DriftScore ? Stats.driftScore : Stats.styleScore;
             r.position = (Rival != null && rivalFinished && !won) ? 2 : 1;
+            r.usedCheckpoint = UsedCheckpoint;
+            r.canCheckpoint = !won && cpValid && Def.kind != RaceKind.Endless;
 
             bool replay = save != null && save.IsCompleted(Def.id);
 
@@ -389,6 +482,7 @@ namespace MidnightLegacy
                 }
                 if (silver) m = 2;
                 if (silver && gold) m = 3;
+                if (UsedCheckpoint) m = Mathf.Min(m, 2);   // no gold after continuing from a checkpoint
                 r.medal = m;
 
                 float mult = replay ? 0.5f : 1f;
@@ -421,7 +515,7 @@ namespace MidnightLegacy
             if (corners > 0) { r.lines.Add(new RewardLine("Clean corners x" + Stats.cleanCorners, corners)); bonus += corners; }
             if (sectors > 0) { r.lines.Add(new RewardLine("Clean sectors x" + Stats.cleanSectors, sectors)); bonus += sectors; }
             if (drift > 0) { r.lines.Add(new RewardLine("Drift score " + Stats.driftScore, drift)); bonus += drift; }
-            if (won && Stats.Perfect && Def.kind != RaceKind.Tutorial) { r.lines.Add(new RewardLine("Perfect run", 150)); bonus += 150; }
+            if (won && Stats.Perfect && !UsedCheckpoint && Def.kind != RaceKind.Tutorial) { r.lines.Add(new RewardLine("Perfect run", 150)); bonus += 150; }
             if (Def.kind == RaceKind.Tutorial) { bonus = 0; r.lines.Clear(); r.lines.Add(new RewardLine("Tutorial reward", Def.rewardCash)); r.cash = Def.rewardCash; }
 
             r.bonusCash = bonus;

@@ -101,6 +101,8 @@ namespace MidnightLegacy
         public float distance;
         public bool newBest;
         public bool canRevive;
+        public bool canCheckpoint;        // failed, but a checkpoint was passed: the player may continue from it
+        public bool usedCheckpoint;       // the run was continued from a checkpoint (medal capped, no best time)
         public RunStats stats;
         public readonly List<RewardLine> lines = new List<RewardLine>();
     }

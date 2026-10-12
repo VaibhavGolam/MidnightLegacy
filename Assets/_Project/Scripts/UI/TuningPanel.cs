@@ -100,9 +100,9 @@ namespace MidnightLegacy
 
             if (cam != null)
             {
-                Add("cam.viewHeightSlow (m of road on screen)", 18f, 50f, () => cam.viewHeightSlow, v => cam.viewHeightSlow = v);
-                Add("cam.viewHeightFast (m of road on screen)", 25f, 70f, () => cam.viewHeightFast, v => cam.viewHeightFast = v);
-                Add("cam.carScreenHeight (0.1 low, 0.5 centre)", 0.1f, 0.5f, () => cam.carScreenHeight, v => cam.carScreenHeight = v);
+                Add("cam.viewHeightSlow (m of road on screen)", 12f, 50f, () => cam.viewHeightSlow, v => cam.viewHeightSlow = v);
+                Add("cam.viewHeightFast (m of road on screen)", 16f, 70f, () => cam.viewHeightFast, v => cam.viewHeightFast = v);
+                Add("cam.carScreenHeight (0.1 low, 0.5 centre)", 0.1f, 0.6f, () => cam.carScreenHeight, v => cam.carScreenHeight = v);
                 Add("cam.followCarHeading", 0f, 1f, () => cam.followCarHeading, v => cam.followCarHeading = v);
                 Add("cam.yawSmoothing", 1f, 12f, () => cam.yawSmoothing, v => cam.yawSmoothing = v);
             }

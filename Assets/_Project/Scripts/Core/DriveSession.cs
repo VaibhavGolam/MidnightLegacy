@@ -167,6 +167,19 @@ namespace MidnightLegacy
             Chase.Snap();
         }
 
+        /// <summary>Continues the same event from the last checkpoint (free). Falls back to a full restart when there is none.</summary>
+        public void RestartFromCheckpoint()
+        {
+            if (Race == null) return;
+            if (!Race.HasCheckpoint) { Restart(); return; }
+            Paused = false;
+            Time.timeScale = 1f;
+            input.Locked = false;
+            input.ClearPresses();
+            Race.RestartFromCheckpoint();
+            Chase.Snap();
+        }
+
         public void SetPaused(bool paused)
         {
             if (Paused == paused) return;

@@ -35,7 +35,7 @@ namespace MidnightLegacy
             int dist = Mathf.RoundToInt(r.distance);
             if (r.won && def.kind != RaceKind.DriftScore && def.kind != RaceKind.Endless)
             {
-                if (b == null || b.time <= 0f || r.time < b.time) r.newBest = true;
+                if (!r.usedCheckpoint && (b == null || b.time <= 0f || r.time < b.time)) r.newBest = true;
             }
             if ((def.kind == RaceKind.DriftScore || def.kind == RaceKind.Endless) && r.score > (b != null ? b.score : 0)) r.newBest = true;
             if (def.kind == RaceKind.Endless && dist > (b != null ? b.distance : 0)) r.newBest = true;
@@ -83,11 +83,8 @@ namespace MidnightLegacy
             BestEntry b = s.GetOrCreateBest(def.id);
             if (r.won)
             {
-                if (def.kind != RaceKind.DriftScore && def.kind != RaceKind.Endless && def.kind != RaceKind.Chase)
-                {
-                    if (b.time <= 0f || r.time < b.time) { b.time = r.time; r.newBest = true; }
-                }
-                else if (def.kind == RaceKind.Chase)
+                // a run continued from a checkpoint still pays out, but it never sets a best time
+                if (!r.usedCheckpoint && def.kind != RaceKind.DriftScore && def.kind != RaceKind.Endless)
                 {
                     if (b.time <= 0f || r.time < b.time) { b.time = r.time; r.newBest = true; }
                 }
