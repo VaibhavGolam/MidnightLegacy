@@ -55,7 +55,7 @@ namespace MidnightLegacy.EditorTools
         public static void Apply()
         {
             bool restart = ApplySettings();
-            string msg = "Project settings applied: portrait, Linear, IL2CPP, ARM64, Vulkan + GLES3, min Android 7.0 (API 24), URP asset assigned.";
+            string msg = "Project settings applied: portrait, Linear, IL2CPP, ARM64, Vulkan + GLES3, min Android 8.0 (API 26), URP asset assigned.";
             if (restart) msg += "\nActive Input Handling was switched to the new Input System. Restart Unity when it asks.";
             Debug.Log("[MidnightLegacy] " + msg);
             EditorUtility.DisplayDialog("Midnight Legacy", msg, "OK");
@@ -79,7 +79,7 @@ namespace MidnightLegacy.EditorTools
             PlayerSettings.SetScriptingBackend(android, ScriptingImplementation.IL2CPP);
             PlayerSettings.SetManagedStrippingLevel(android, ManagedStrippingLevel.Medium);
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
-            PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
+            PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
             PlayerSettings.Android.optimizedFramePacing = true;
             PlayerSettings.gcIncremental = true;

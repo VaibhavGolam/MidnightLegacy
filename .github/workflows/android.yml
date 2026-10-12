@@ -33,7 +33,6 @@ jobs:
           key: Library-Android-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: |
             Library-Android-
-            Library-
 
       - name: Build
         uses: game-ci/unity-builder@v4
@@ -44,13 +43,15 @@ jobs:
         with:
           targetPlatform: Android
           unityVersion: auto
-          androidExportType: androidPackage
-          buildName: MidnightLegacy
-          versioning: Semantic
+          buildMethod: MidnightLegacy.EditorTools.CIBuild.BuildAndroid
+          versioning: None
+          allowDirtyBuild: true
 
       - name: Upload APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: MidnightLegacy-Android
           path: build/Android
+          if-no-files-found: warn
           retention-days: 14

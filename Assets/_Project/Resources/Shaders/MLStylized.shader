@@ -26,6 +26,12 @@ Shader "MidnightLegacy/Stylized"
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
+        // own sRGB to linear (same curve URP used to ship), so it works in every URP version
+        half3 MLSRGBToLinear(half3 c)
+        {
+            return c * (c * (c * 0.305306011h + 0.682171111h) + 0.012522878h);
+        }
+
         CBUFFER_START(UnityPerMaterial)
             half4 _Tint;
             float _Unlit;
@@ -98,7 +104,7 @@ Shader "MidnightLegacy/Stylized"
                     : distance(_WorldSpaceCameraPos, i.positionWS);
                 half fogT = saturate((camDist - _MLFogParams.x) / max(0.01, _MLFogParams.y - _MLFogParams.x));
 
-                half3 albedo = SRGBToLinear(i.color.rgb) * _Tint.rgb;
+                half3 albedo = MLSRGBToLinear(i.color.rgb) * _Tint.rgb;
 
                 if (_Unlit > 0.5)
                 {
